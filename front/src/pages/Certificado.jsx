@@ -1,0 +1,137 @@
+import { useEffect, useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import api from '../utils/api'
+import './Certificado.css'
+
+function Certificado() {
+  const { codigo } = useParams()
+  const navigate = useNavigate()
+  const [certificado, setCertificado] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const fetchCertificado = async () => {
+      try {
+        const response = await api.get(`/public/certificados/${codigo}`)
+        if (response.data.found) {
+          setCertificado(response.data)
+        } else {
+          setError('Certificado no encontrado')
+        }
+      } catch (err) {
+        setError('Error al cargar el certificado')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchCertificado()
+  }, [codigo])
+
+  const handleDownloadPDF = () => {
+    // Abrir PDF en nueva pestaña (el backend ya está configurado con Content-Disposition: inline)
+    window.open(`/api/public/certificados/${codigo}/pdf`, '_blank')
+  }
+
+  if (loading) {
+    return (
+      <div className="certificado-container">
+        <div className="loading">Cargando certificado...</div>
+      </div>
+    )
+  }
+
+  if (error || !certificado) {
+    return (
+      <div className="certificado-container">
+        <div className="error-card">
+          <h2>Certificado no encontrado</h2>
+          <p>{error || 'El certificado solicitado no existe o ha sido eliminado.'}</p>
+        </div>
+      </div>
+    )
+  }
+
+  const isAnulado = certificado.estado === 'ANULADO'
+  const nombreCompleto = `${certificado.nombres} ${certificado.apellidos}`
+
+  const pdfUrl = `/api/public/certificados/${codigo}/pdf`
+
+  return (
+    <div className="certificado-container">
+      <div className="certificado-layout">
+        {/* Columna izquierda: Información del certificado */}
+        <div className="certificado-info-panel">
+          {isAnulado && (
+            <div className="alert-anulado">
+              <strong>⚠️ Certificado Anulado</strong>
+              <p>Este certificado ha sido anulado y no es válido.</p>
+            </div>
+          )}
+
+          <div className="info-header">
+            <h1>CERTIFICADO</h1>
+            <p className="info-subtitle">Verificación Digital</p>
+          </div>
+
+          <div className="info-content">
+            <div className="info-section">
+              <div className="info-label">Nombre Completo</div>
+              <div className="info-value nombre">{nombreCompleto}</div>
+            </div>
+
+            <div className="info-section">
+              <div className="info-label">Curso</div>
+              <div className="info-value curso">{certificado.curso}</div>
+            </div>
+
+            {certificado.horas && (
+              <div className="info-section">
+                <div className="info-label">Duración</div>
+                <div className="info-value">{certificado.horas} horas</div>
+              </div>
+            )}
+
+            <div className="info-section">
+              <div className="info-label">Fecha de Emisión</div>
+              <div className="info-value">{certificado.fecha_emision}</div>
+            </div>
+
+            <div className="info-section">
+              <div className="info-label">Código de Verificación</div>
+              <div className="info-value codigo">{certificado.codigo}</div>
+            </div>
+          </div>
+
+          <div className="info-actions">
+            <button onClick={handleDownloadPDF} className="btn-download">
+              📄 Ver PDF Completo
+            </button>
+            <button onClick={() => navigate('/verificar')} className="btn-back">
+              🔍 Verificar Otro Certificado
+            </button>
+          </div>
+        </div>
+
+        {/* Columna derecha: Previsualización del PDF */}
+        <div className="certificado-preview-panel">
+          <div className="preview-header">
+            <h2>Vista Previa del Certificado</h2>
+          </div>
+          <div className="preview-container">
+            <iframe
+              src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+              type="application/pdf"
+              className="pdf-preview"
+              title="Vista previa del certificado"
+              frameBorder="0"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default Certificado
