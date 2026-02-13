@@ -1,15 +1,24 @@
 """
 Sistema de almacenamiento de archivos (PDFs)
-Soporta: Local (Hostinger), S3, Google Drive
+Soporta: Local (Hostinger), S3 (opcional)
 """
 import os
 from pathlib import Path
 from typing import Optional, BinaryIO
 from datetime import datetime
-import boto3
-from botocore.exceptions import ClientError
 from app.core.config import settings
 import json
+
+# Importar boto3 solo si se necesita S3 (opcional)
+try:
+    import boto3
+    from botocore.exceptions import ClientError
+    BOTO3_AVAILABLE = True
+except ImportError:
+    BOTO3_AVAILABLE = False
+    # Crear una clase dummy para ClientError si no está disponible
+    class ClientError(Exception):
+        pass
 
 
 class StorageService:
@@ -22,6 +31,8 @@ class StorageService:
     def _init_storage(self):
         """Inicializa el servicio de almacenamiento según la configuración"""
         if self.storage_type == 's3':
+            if not BOTO3_AVAILABLE:
+                raise Exception("boto3 no está instalado. Para usar S3, instala: pip install boto3")
             try:
                 self.s3_client = boto3.client(
                     's3',
