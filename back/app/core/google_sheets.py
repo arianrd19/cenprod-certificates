@@ -30,19 +30,51 @@ class GoogleSheetsService:
             ]
             
             # Obtener credenciales según la configuración
+            # Prioridad: 1) Archivo (Secret File en Render), 2) Base64, 3) JSON directo
+            
+            # Validar y limpiar variables de entorno - solo considerar válidas si pasan validación estricta
+            service_account_json = None
+            if settings.SERVICE_ACCOUNT_JSON:
+                cleaned = settings.SERVICE_ACCOUNT_JSON.strip()
+                # Solo considerar válido si tiene contenido real, no tiene placeholders, y es un JSON válido
+                if cleaned and len(cleaned) > 100 and not ('...' in cleaned) and cleaned.startswith('{'):
+                    service_account_json = cleaned
+            
+            service_account_json_b64 = None
             if settings.SERVICE_ACCOUNT_JSON_B64:
-                # Opción 1: Base64 (más seguro para variables de entorno)
+                cleaned = settings.SERVICE_ACCOUNT_JSON_B64.strip()
+                if cleaned and len(cleaned) > 50:
+                    service_account_json_b64 = cleaned
+            
+            # Debug: verificar qué opciones están disponibles
+            debug_info = []
+            if settings.SERVICE_ACCOUNT_FILE:
+                file_exists = os.path.exists(settings.SERVICE_ACCOUNT_FILE)
+                debug_info.append(f"GOOGLE_SA_FILE={settings.SERVICE_ACCOUNT_FILE} (existe: {file_exists})")
+            if service_account_json_b64:
+                debug_info.append(f"GOOGLE_SERVICE_ACCOUNT_B64: configurado (length: {len(service_account_json_b64)})")
+            if service_account_json:
+                debug_info.append(f"GOOGLE_SERVICE_ACCOUNT: configurado (length: {len(service_account_json)})")
+            
+            if settings.SERVICE_ACCOUNT_FILE and os.path.exists(settings.SERVICE_ACCOUNT_FILE):
+                # Opción 1: Archivo (Secret File en Render: /etc/secrets/GOOGLE_SERVICE_ACCOUNT)
+                creds = Credentials.from_service_account_file(
+                    settings.SERVICE_ACCOUNT_FILE,
+                    scopes=scopes
+                )
+            elif service_account_json_b64:
+                # Opción 2: Base64 (más seguro para variables de entorno)
                 import base64
                 try:
-                    decoded = base64.b64decode(settings.SERVICE_ACCOUNT_JSON_B64).decode('utf-8')
+                    decoded = base64.b64decode(service_account_json_b64).decode('utf-8')
                     creds_info = json.loads(decoded)
                 except Exception as e:
                     raise Exception(f"Error decodificando GOOGLE_SERVICE_ACCOUNT_B64. Error: {str(e)}")
                 creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
-            elif settings.SERVICE_ACCOUNT_JSON:
-                # Opción 2: JSON directo en variable de entorno
+            elif service_account_json:
+                # Opción 3: JSON directo en variable de entorno (solo si es válido y no tiene placeholders)
                 try:
-                    creds_info = json.loads(settings.SERVICE_ACCOUNT_JSON)
+                    creds_info = json.loads(service_account_json)
                 except json.JSONDecodeError as e:
                     raise Exception(f"Error parseando GOOGLE_SERVICE_ACCOUNT. Verifica que sea un JSON válido. Error: {str(e)}")
                 
@@ -54,14 +86,31 @@ class GoogleSheetsService:
                     creds_info['private_key'] = creds_info['private_key'].replace('\\\\n', '\n')
                 
                 creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
-            elif settings.SERVICE_ACCOUNT_FILE:
-                # Si hay ruta a archivo
-                creds = Credentials.from_service_account_file(
-                    settings.SERVICE_ACCOUNT_FILE,
-                    scopes=scopes
-                )
             else:
-                raise Exception("No se encontró configuración de Service Account. Configura GOOGLE_SA_FILE, GOOGLE_APPLICATION_CREDENTIALS o GOOGLE_SERVICE_ACCOUNT")
+                # Mensaje de error más descriptivo
+                error_msg = "No se encontró configuración válida de Service Account.\n"
+                error_msg += "Opciones disponibles:\n"
+                error_msg += "1. GOOGLE_SA_FILE=/etc/secrets/GOOGLE_SERVICE_ACCOUNT (para Secret Files en Render)\n"
+                error_msg += "2. GOOGLE_SERVICE_ACCOUNT_B64 (JSON codificado en Base64)\n"
+                error_msg += "3. GOOGLE_SERVICE_ACCOUNT (JSON completo, sin placeholders)\n"
+                if settings.SERVICE_ACCOUNT_FILE:
+                    file_exists = os.path.exists(settings.SERVICE_ACCOUNT_FILE)
+                    error_msg += f"\nArchivo configurado: {settings.SERVICE_ACCOUNT_FILE} (existe: {file_exists})\n"
+                    if not file_exists:
+                        error_msg += "   Verifica que el Secret File esté creado en Render con el nombre correcto.\n"
+                if settings.SERVICE_ACCOUNT_JSON:
+                    json_val = settings.SERVICE_ACCOUNT_JSON.strip() if settings.SERVICE_ACCOUNT_JSON else ""
+                    if not json_val:
+                        error_msg += "\nGOOGLE_SERVICE_ACCOUNT está vacío.\n"
+                    elif '...' in json_val:
+                        error_msg += f"\nGOOGLE_SERVICE_ACCOUNT tiene placeholders (...), no se puede usar.\n"
+                    elif len(json_val) < 100:
+                        error_msg += f"\nGOOGLE_SERVICE_ACCOUNT es muy corto (length: {len(json_val)}), probablemente no es válido.\n"
+                    elif not json_val.startswith('{'):
+                        error_msg += f"\nGOOGLE_SERVICE_ACCOUNT no es un JSON válido (no empieza con {{).\n"
+                if debug_info:
+                    error_msg += "\nDebug info:\n" + "\n".join(debug_info)
+                raise Exception(error_msg)
             
             self.client = gspread.authorize(creds)
             
