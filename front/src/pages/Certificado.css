@@ -10,7 +10,8 @@
 
 .certificado-layout {
   display: grid;
-  grid-template-columns: 380px 1fr; /* Info más pequeña, PDF más grande */
+  grid-template-columns: 380px 1fr;
+  /* Info más pequeña, PDF más grande */
   gap: 2rem;
   max-width: 1800px;
   margin: 0 auto;
@@ -36,10 +37,28 @@
 }
 
 .info-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   text-align: center;
-  padding-bottom: 1rem;
+  padding-bottom: 1.5rem;
   border-bottom: 2px solid;
   border-image: linear-gradient(135deg, #10b981 0%, #3b82f6 100%) 1;
+}
+
+.header-logo {
+  height: 60px;
+  width: auto;
+  max-width: 80px;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1));
+}
+
+.header-title {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .info-header h1 {
@@ -133,6 +152,46 @@
 }
 
 .btn-download,
+.btn-download-file {
+  width: 100%;
+  padding: 12px;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  text-decoration: none;
+}
+
+.btn-download {
+  background: linear-gradient(135deg, #004481 0%, #003366 100%);
+  box-shadow: 0 4px 12px rgba(0, 51, 102, 0.2);
+}
+
+.btn-download:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 51, 102, 0.3);
+  background: linear-gradient(135deg, #003366 0%, #002244 100%);
+}
+
+.btn-download-file {
+  background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.2);
+}
+
+.btn-download-file:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(40, 167, 69, 0.3);
+  background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
+}
+
 .btn-back {
   padding: 0.75rem 1.5rem;
   border-radius: 10px;
@@ -143,15 +202,6 @@
   letter-spacing: 0.5px;
   border: none;
   cursor: pointer;
-}
-
-.btn-download {
-  background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
-  color: var(--color-white);
-}
-
-.btn-download:hover {
-  transform: translateY(-3px);
   box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
 }
 
@@ -240,7 +290,7 @@
   margin: 0;
   outline: none;
   display: block;
-  frame-border: 0;
+  border: none;
 }
 
 /* Si embed no funciona, mostrar mensaje alternativo */
@@ -281,7 +331,8 @@
 }
 
 /* Estados de carga y error */
-.loading, .error-card {
+.loading,
+.error-card {
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
   border-radius: 20px;

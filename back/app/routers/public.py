@@ -96,13 +96,21 @@ async def search_certificate(search: CertificateSearch, request: Request):
 
 
 @router.get("/certificados/{codigo}/pdf")
-async def download_certificate_pdf(codigo: str, request: Request, force_regenerate: bool = False):
+async def download_certificate_pdf(
+    codigo: str, 
+    request: Request, 
+    force_regenerate: bool = False,
+    download: bool = False
+):
     """Descarga el PDF del certificado (público). Si no existe, lo genera y guarda."""
     try:
         certificado = sheets_service.get_certificate_by_code(codigo)
         
         if not certificado:
             raise HTTPException(status_code=404, detail="Certificado no encontrado")
+        
+        # Determinar disposición (ver o descargar)
+        disposition_type = "attachment" if download else "inline"
         
         # Si hay pdf_url y el archivo existe, y no se fuerza regeneración, redirigir a ese
         pdf_url = certificado.get("pdf_url")
@@ -122,11 +130,13 @@ async def download_certificate_pdf(codigo: str, request: Request, force_regenera
                         file_path = ROOT / 'uploads' / 'certificados' / relative_path
                         if file_path.exists():
                             from fastapi.responses import FileResponse
+                            nombre_completo = f"{certificado.get('nombres', '')}_{certificado.get('apellidos', '')}"
+                            filename = f"certificado_{nombre_completo.replace(' ', '_')}.pdf"
                             return FileResponse(
                                 str(file_path),
                                 media_type="application/pdf",
                                 headers={
-                                    "Content-Disposition": f"inline; filename=certificado_{codigo}.pdf",
+                                    "Content-Disposition": f"{disposition_type}; filename={filename}",
                                     "X-Content-Type-Options": "nosniff"
                                 }
                             )
@@ -178,7 +188,7 @@ async def download_certificate_pdf(codigo: str, request: Request, force_regenera
                         str(file_path),
                         media_type="application/pdf",
                         headers={
-                            "Content-Disposition": f"inline; filename={filename}",
+                            "Content-Disposition": f"{disposition_type}; filename={filename}",
                             "X-Content-Type-Options": "nosniff"
                         }
                     )
@@ -196,7 +206,7 @@ async def download_certificate_pdf(codigo: str, request: Request, force_regenera
             pdf_buffer,
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f"inline; filename={filename}",
+                "Content-Disposition": f"{disposition_type}; filename={filename}",
                 "Content-Type": "application/pdf",
                 "X-Content-Type-Options": "nosniff"
             }

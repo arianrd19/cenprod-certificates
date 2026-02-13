@@ -4,6 +4,7 @@ import Verificar from './pages/Verificar'
 import Certificado from './pages/Certificado'
 import Login from './pages/Login'
 import Panel from './pages/Panel'
+import PdfFullView from './pages/PdfFullView'
 import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
@@ -14,6 +15,7 @@ function App() {
         <Route path="verificar" element={<Verificar />} />
         <Route path="certificado/:codigo" element={<Certificado />} />
         <Route path="consulta/:codigo" element={<Certificado />} />
+        <Route path="pdf/:codigo" element={<PdfFullView />} />
         <Route path="login" element={<Login />} />
         <Route
           path="panel/*"

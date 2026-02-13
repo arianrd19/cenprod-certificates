@@ -133,6 +133,11 @@ def generate_certificate_pdf(certificado: Dict) -> BytesIO:
     W, H = landscape(A4)
     c = canvas.Canvas(buffer, pagesize=(W, H))
     
+    # Metadatos del PDF
+    c.setTitle(codigo)
+    c.setAuthor("Centro Profesional Docente")
+    c.setSubject(f"Certificado {codigo}")
+    
     # Dibujar plantilla de fondo
     try:
         c.drawImage(str(plantilla_path), 0, 0, width=W, height=H)

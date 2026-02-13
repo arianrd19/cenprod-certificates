@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../utils/api'
+import logo from '../assets/logo.png'
+import logoInst from '../assets/Logo_INST.png'
 import './Certificado.css'
 
 function Certificado() {
@@ -30,8 +32,9 @@ function Certificado() {
   }, [codigo])
 
   const handleDownloadPDF = () => {
-    // Abrir PDF en nueva pestaña (el backend ya está configurado con Content-Disposition: inline)
-    window.open(`/api/public/certificados/${codigo}/pdf`, '_blank')
+    // Abrir PDF en nueva pestaña usando el visor personalizado del frontend
+    // Esto mantiene el favicon y permite titulo personalizado
+    window.open(`/pdf/${codigo}`, '_blank')
   }
 
   if (loading) {
@@ -71,8 +74,12 @@ function Certificado() {
           )}
 
           <div className="info-header">
-            <h1>CERTIFICADO</h1>
-            <p className="info-subtitle">Verificación Digital</p>
+            <img src={logo} alt="Logo" className="header-logo" />
+            <div className="header-title">
+              <h1>CERTIFICADO</h1>
+              <p className="info-subtitle">Verificación Digital</p>
+            </div>
+            <img src={logoInst} alt="Logo Institucional" className="header-logo" />
           </div>
 
           <div className="info-content">
@@ -107,6 +114,9 @@ function Certificado() {
           <div className="info-actions">
             <button onClick={handleDownloadPDF} className="btn-download">
               📄 Ver PDF Completo
+            </button>
+            <button onClick={() => window.location.href = `/api/public/certificados/${codigo}/pdf?download=true`} className="btn-download-file">
+              ⬇️ Descargar Certificado Digital
             </button>
             <button onClick={() => navigate('/verificar')} className="btn-back">
               🔍 Verificar Otro Certificado
