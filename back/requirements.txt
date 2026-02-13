@@ -14,3 +14,7 @@ reportlab>=4.0.7
 slowapi>=0.1.9
 requests>=2.31.0
 pypdf>=3.17.0
+
+python-multipart
+slowapi
+httpx

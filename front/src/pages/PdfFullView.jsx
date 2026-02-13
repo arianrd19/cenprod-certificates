@@ -10,6 +10,19 @@ function PdfFullView() {
         // Establecer título de la pestaña
         document.title = codigo || 'Certificado'
 
+        // Eliminar márgenes y padding del body y html para pantalla completa
+        const originalBodyStyle = document.body.style.cssText
+        const originalHtmlStyle = document.documentElement.style.cssText
+
+        document.body.style.margin = '0'
+        document.body.style.padding = '0'
+        document.body.style.overflow = 'hidden'
+        document.body.style.backgroundColor = '#525659'
+        document.documentElement.style.margin = '0'
+        document.documentElement.style.padding = '0'
+        document.documentElement.style.overflow = 'hidden'
+        document.documentElement.style.backgroundColor = '#525659'
+
         // Verificar si existe el certificado (opcional, pero buena práctica para UX)
         const checkCertificate = async () => {
             try {
@@ -23,6 +36,12 @@ function PdfFullView() {
 
         if (codigo) {
             checkCertificate()
+        }
+
+        // Cleanup: restaurar estilos originales al desmontar
+        return () => {
+            document.body.style.cssText = originalBodyStyle
+            document.documentElement.style.cssText = originalHtmlStyle
         }
     }, [codigo])
 

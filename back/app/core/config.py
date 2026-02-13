@@ -63,13 +63,22 @@ class Config:
     # 2) GOOGLE_APPLICATION_CREDENTIALS (convención Google)
     # 3) ./service_account.json si existe (solo local)
     # 4) path/service_account.json si existe (solo local)
-    SERVICE_ACCOUNT_FILE = (
-        os.getenv('GOOGLE_SA_FILE')
-        or os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
-        or os.getenv('GOOGLE_SERVICE_ACCOUNT_FILE')
-        or (str(ROOT / 'service_account.json') if (ROOT / 'service_account.json').exists() else None)
-        or (str(ROOT / 'path' / 'service_account.json') if (ROOT / 'path' / 'service_account.json').exists() else None)
-    )
+    # Resuelve credenciales de Google verificando existencia
+    SERVICE_ACCOUNT_FILE = None
+    for candidate in [
+        os.getenv('GOOGLE_SA_FILE'),
+        os.getenv('GOOGLE_APPLICATION_CREDENTIALS'),
+        os.getenv('GOOGLE_SERVICE_ACCOUNT_FILE'),
+        str(ROOT / 'service_account.json'),
+        str(ROOT / 'path' / 'service_account.json')
+    ]:
+        if candidate and os.path.exists(candidate):
+            SERVICE_ACCOUNT_FILE = str(candidate)
+            break
+    
+    # Fallback para log de error si nada existe
+    if not SERVICE_ACCOUNT_FILE:
+        SERVICE_ACCOUNT_FILE = os.getenv('GOOGLE_SA_FILE') or os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
 
     # Alternativa: JSON completo en env (si algún entorno lo usa)
     SERVICE_ACCOUNT_JSON = os.getenv('GOOGLE_SERVICE_ACCOUNT')
