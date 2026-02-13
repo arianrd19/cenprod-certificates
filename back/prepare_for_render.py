@@ -60,6 +60,25 @@ def prepare_service_account_json():
         print(f"\nTambien guardado en: {output_file}")
         print("   (Puedes abrir este archivo y copiar su contenido)")
         
+        # También generar versión base64 (más segura para variables de entorno)
+        import base64
+        json_base64 = base64.b64encode(json_one_line.encode('utf-8')).decode('utf-8')
+        
+        output_file_b64 = Path('service_account_base64.txt')
+        with open(output_file_b64, 'w', encoding='utf-8') as f:
+            f.write(json_base64)
+        
+        print("\n" + "="*80)
+        print("OPCION 2: Usar Base64 (RECOMENDADO - mas seguro para caracteres especiales)")
+        print("="*80)
+        print("Agrega esta variable en Render:")
+        print("GOOGLE_SERVICE_ACCOUNT_B64=" + json_base64)
+        print("="*80)
+        print(f"\nTambien guardado en: {output_file_b64}")
+        print("\nNOTA: Si usas Base64, necesitas actualizar config.py para soportarlo.")
+        print("      Por ahora, usa la Opcion 1 (JSON directo) y asegurate de que")
+        print("      el private_key tenga \\n escapados correctamente.")
+        
     except json.JSONDecodeError as e:
         print(f"ERROR: El archivo JSON no es valido: {e}")
         sys.exit(1)

@@ -30,9 +30,29 @@ class GoogleSheetsService:
             ]
             
             # Obtener credenciales según la configuración
-            if settings.SERVICE_ACCOUNT_JSON:
-                # Si hay JSON en variable de entorno
-                creds_info = json.loads(settings.SERVICE_ACCOUNT_JSON)
+            if settings.SERVICE_ACCOUNT_JSON_B64:
+                # Opción 1: Base64 (más seguro para variables de entorno)
+                import base64
+                try:
+                    decoded = base64.b64decode(settings.SERVICE_ACCOUNT_JSON_B64).decode('utf-8')
+                    creds_info = json.loads(decoded)
+                except Exception as e:
+                    raise Exception(f"Error decodificando GOOGLE_SERVICE_ACCOUNT_B64. Error: {str(e)}")
+                creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+            elif settings.SERVICE_ACCOUNT_JSON:
+                # Opción 2: JSON directo en variable de entorno
+                try:
+                    creds_info = json.loads(settings.SERVICE_ACCOUNT_JSON)
+                except json.JSONDecodeError as e:
+                    raise Exception(f"Error parseando GOOGLE_SERVICE_ACCOUNT. Verifica que sea un JSON válido. Error: {str(e)}")
+                
+                # Asegurar que el private_key tenga los saltos de línea correctos
+                if 'private_key' in creds_info and isinstance(creds_info['private_key'], str):
+                    # Reemplazar \\n por \n real si es necesario (cuando viene de variable de entorno)
+                    creds_info['private_key'] = creds_info['private_key'].replace('\\n', '\n')
+                    # También manejar el caso donde viene como r'\\n'
+                    creds_info['private_key'] = creds_info['private_key'].replace('\\\\n', '\n')
+                
                 creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
             elif settings.SERVICE_ACCOUNT_FILE:
                 # Si hay ruta a archivo

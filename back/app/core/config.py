@@ -73,6 +73,8 @@ class Config:
 
     # Alternativa: JSON completo en env (si algún entorno lo usa)
     SERVICE_ACCOUNT_JSON = os.getenv('GOOGLE_SERVICE_ACCOUNT')
+    # También soportar Base64 (más seguro para variables de entorno)
+    SERVICE_ACCOUNT_JSON_B64 = os.getenv('GOOGLE_SERVICE_ACCOUNT_B64')
 
 
 # Instancia global de configuración
