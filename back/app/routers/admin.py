@@ -330,18 +330,20 @@ async def unir_pdfs(
         
         # Actualizar certificado en Google Sheets con múltiples campos
         try:
+            # IMPORTANTE: Guardar la URL del archivo físico en PDF_URL para que el endpoint público
+            # sepa encontrarlo y no lo regenere (perdiendo la unión).
             fields_to_update = {
-                'PDF_URL': verify_url,  # URL de verificación, no la URL del archivo físico
+                'PDF_URL': storage_info['url'],
                 'CODIGO CERTIFICADO': nombre_pdf_subido,
                 'FECHA_GENERACION': timestamp_generacion
             }
             sheets_service.update_certificate_fields(codigo, fields_to_update)
-            print(f"DEBUG: PDF unido guardado y campos actualizados en Sheets: PDF_URL={verify_url}, CODIGO CERTIFICADO: {nombre_pdf_subido}, Fecha: {timestamp_generacion}")
+            print(f"DEBUG: PDF unido guardado y campos actualizados en Sheets: PDF_URL={storage_info['url']}, CODIGO CERTIFICADO: {nombre_pdf_subido}, Fecha: {timestamp_generacion}")
         except Exception as e_update:
             print(f"ADVERTENCIA: No se pudo actualizar campos en Sheets: {str(e_update)}")
             # Intentar actualizar solo la URL como fallback
             try:
-                sheets_service.update_certificate_pdf_url(codigo, verify_url)
+                sheets_service.update_certificate_pdf_url(codigo, storage_info['url'])
             except:
                 pass
         
