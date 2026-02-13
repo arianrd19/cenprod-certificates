@@ -60,7 +60,7 @@ function Panel() {
           <div className="sidebar-user-info">
             <p className="sidebar-email">{user.email}</p>
             <span className="sidebar-role">
-              {user.role.toUpperCase()}
+              {(user?.role || 'operador').toUpperCase()}
             </span>
           </div>
         </div>

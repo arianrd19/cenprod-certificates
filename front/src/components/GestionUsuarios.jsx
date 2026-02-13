@@ -20,7 +20,7 @@ function GestionUsuarios() {
   const fetchUsers = async () => {
     try {
       const response = await api.get('/admin/users')
-      setUsers(response.data)
+      setUsers(Array.isArray(response.data) ? response.data : [])
     } catch (err) {
       setError('Error al cargar los usuarios')
     } finally {

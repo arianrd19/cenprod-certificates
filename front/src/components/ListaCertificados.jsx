@@ -21,7 +21,7 @@ function ListaCertificados() {
   const fetchCertificados = async () => {
     try {
       const response = await api.get('/admin/certificados')
-      setCertificados(response.data)
+      setCertificados(Array.isArray(response.data) ? response.data : [])
     } catch (err) {
       setError('Error al cargar los certificados')
     } finally {
@@ -74,13 +74,14 @@ function ListaCertificados() {
     setTimeout(() => setSuccess(''), 3000)
   }
 
-  const filteredCertificados = certificados.filter((cert) => {
-    const search = searchTerm.toLowerCase()
+  const certificadosArray = Array.isArray(certificados) ? certificados : []
+  const filteredCertificados = certificadosArray.filter((cert) => {
+    const searchLower = searchTerm.toLowerCase().trim()
     return (
-      cert.codigo?.toLowerCase().includes(search) ||
-      cert.nombres?.toLowerCase().includes(search) ||
-      cert.apellidos?.toLowerCase().includes(search) ||
-      cert.curso?.toLowerCase().includes(search)
+      cert?.codigo?.toLowerCase().includes(searchLower) ||
+      cert?.nombres?.toLowerCase().includes(searchLower) ||
+      cert?.apellidos?.toLowerCase().includes(searchLower) ||
+      cert?.curso?.toLowerCase().includes(searchLower)
     )
   })
 
@@ -92,22 +93,22 @@ function ListaCertificados() {
     <div className="lista-certificados">
       <div className="lista-header">
         <h2>Lista de Certificados</h2>
-      {error && <div className="alert error">{error}</div>}
-      {success && <div className="alert success">{success}</div>}
-      
-      <ConfirmModal
-        isOpen={showAnularModal}
-        onClose={() => {
-          setShowAnularModal(false)
-          setCertificadoToAnular(null)
-        }}
-        onConfirm={handleAnularConfirm}
-        title="Anular Certificado"
-        message={`¿Está seguro de anular el certificado con código ${certificadoToAnular}? Esta acción marcará el certificado como anulado.`}
-        confirmText="Anular"
-        cancelText="Cancelar"
-        type="warning"
-      />
+        {error && <div className="alert error">{error}</div>}
+        {success && <div className="alert success">{success}</div>}
+
+        <ConfirmModal
+          isOpen={showAnularModal}
+          onClose={() => {
+            setShowAnularModal(false)
+            setCertificadoToAnular(null)
+          }}
+          onConfirm={handleAnularConfirm}
+          title="Anular Certificado"
+          message={`¿Está seguro de anular el certificado con código ${certificadoToAnular}? Esta acción marcará el certificado como anulado.`}
+          confirmText="Anular"
+          cancelText="Cancelar"
+          type="warning"
+        />
         <input
           type="text"
           placeholder="Buscar certificados..."

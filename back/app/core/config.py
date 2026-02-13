@@ -63,22 +63,27 @@ class Config:
     # 2) GOOGLE_APPLICATION_CREDENTIALS (convención Google)
     # 3) ./service_account.json si existe (solo local)
     # 4) path/service_account.json si existe (solo local)
-    # Resuelve credenciales de Google verificando existencia
-    SERVICE_ACCOUNT_FILE = None
-    for candidate in [
-        os.getenv('GOOGLE_SA_FILE'),
-        os.getenv('GOOGLE_APPLICATION_CREDENTIALS'),
-        os.getenv('GOOGLE_SERVICE_ACCOUNT_FILE'),
-        str(ROOT / 'service_account.json'),
-        str(ROOT / 'path' / 'service_account.json')
-    ]:
-        if candidate and os.path.exists(candidate):
-            SERVICE_ACCOUNT_FILE = str(candidate)
-            break
+    # Resuelve credenciales de Google (JSON directo o Archivo)
+    SERVICE_ACCOUNT_JSON = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON') # Soporte para pegar el JSON completo
     
-    # Fallback para log de error si nada existe
-    if not SERVICE_ACCOUNT_FILE:
-        SERVICE_ACCOUNT_FILE = os.getenv('GOOGLE_SA_FILE') or os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+    SERVICE_ACCOUNT_FILE = None
+    if not SERVICE_ACCOUNT_JSON:
+        candidates = [
+            os.getenv('GOOGLE_SA_FILE'),
+            '/etc/secrets/GOOGLE_SERVICE_ACCOUNT', # Ruta común en Render
+            '/etc/secrets/service_account.json',   # Otra ruta común
+            os.getenv('GOOGLE_APPLICATION_CREDENTIALS'),
+            str(ROOT / 'service_account.json')
+        ]
+        
+        for candidate in candidates:
+            if candidate and os.path.exists(candidate):
+                SERVICE_ACCOUNT_FILE = str(candidate)
+                break
+    
+    if not SERVICE_ACCOUNT_FILE and not SERVICE_ACCOUNT_JSON:
+        # Fallback para desarrollo local si no se encuentra nada
+        SERVICE_ACCOUNT_FILE = str(ROOT / 'service_account.json')
 
     # Alternativa: JSON completo en env (si algún entorno lo usa)
     SERVICE_ACCOUNT_JSON = os.getenv('GOOGLE_SERVICE_ACCOUNT')

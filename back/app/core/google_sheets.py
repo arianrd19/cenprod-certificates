@@ -24,105 +24,67 @@ class GoogleSheetsService:
     def _connect(self):
         """Conecta a Google Sheets usando service account"""
         try:
+            print("🔍 [DEBUG] Iniciando conexión a Google Sheets...", flush=True)
             scopes = [
                 'https://www.googleapis.com/auth/spreadsheets',
                 'https://www.googleapis.com/auth/drive'
             ]
             
-            # Obtener credenciales según la configuración
-            # Prioridad: 1) Archivo (Secret File en Render), 2) Base64, 3) JSON directo
+            creds = None
             
-            # Validar y limpiar variables de entorno - solo considerar válidas si pasan validación estricta
-            service_account_json = None
-            if settings.SERVICE_ACCOUNT_JSON:
-                cleaned = settings.SERVICE_ACCOUNT_JSON.strip()
-                # Solo considerar válido si tiene contenido real, no tiene placeholders, y es un JSON válido
-                if cleaned and len(cleaned) > 100 and not ('...' in cleaned) and cleaned.startswith('{'):
-                    service_account_json = cleaned
+            # Log de variables para depuración en Render
+            print(f"🔍 [DEBUG] GOOGLE_SA_FILE env: {os.getenv('GOOGLE_SA_FILE')}", flush=True)
+            print(f"🔍 [DEBUG] settings.SERVICE_ACCOUNT_FILE: {settings.SERVICE_ACCOUNT_FILE}", flush=True)
             
-            service_account_json_b64 = None
-            if settings.SERVICE_ACCOUNT_JSON_B64:
-                cleaned = settings.SERVICE_ACCOUNT_JSON_B64.strip()
-                if cleaned and len(cleaned) > 50:
-                    service_account_json_b64 = cleaned
-            
-            # Debug: verificar qué opciones están disponibles
-            debug_info = []
-            if settings.SERVICE_ACCOUNT_FILE:
-                file_exists = os.path.exists(settings.SERVICE_ACCOUNT_FILE)
-                debug_info.append(f"GOOGLE_SA_FILE={settings.SERVICE_ACCOUNT_FILE} (existe: {file_exists})")
-            if service_account_json_b64:
-                debug_info.append(f"GOOGLE_SERVICE_ACCOUNT_B64: configurado (length: {len(service_account_json_b64)})")
-            if service_account_json:
-                debug_info.append(f"GOOGLE_SERVICE_ACCOUNT: configurado (length: {len(service_account_json)})")
-            
-            if settings.SERVICE_ACCOUNT_FILE and os.path.exists(settings.SERVICE_ACCOUNT_FILE):
-                # Opción 1: Archivo (Secret File en Render: /etc/secrets/GOOGLE_SERVICE_ACCOUNT)
-                creds = Credentials.from_service_account_file(
-                    settings.SERVICE_ACCOUNT_FILE,
-                    scopes=scopes
-                )
-            elif service_account_json_b64:
-                # Opción 2: Base64 (más seguro para variables de entorno)
-                import base64
+            # 1. Intentar por archivo (Secret File en Render)
+            target_file = settings.SERVICE_ACCOUNT_FILE or '/etc/secrets/GOOGLE_SERVICE_ACCOUNT'
+            if os.path.exists(target_file):
                 try:
-                    decoded = base64.b64decode(service_account_json_b64).decode('utf-8')
-                    creds_info = json.loads(decoded)
+                    creds = Credentials.from_service_account_file(target_file, scopes=scopes)
+                    print(f"✅ [GOOGLE SHEETS] Conectado usando archivo: {target_file}", flush=True)
                 except Exception as e:
-                    raise Exception(f"Error decodificando GOOGLE_SERVICE_ACCOUNT_B64. Error: {str(e)}")
-                creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
-            elif service_account_json:
-                # Opción 3: JSON directo en variable de entorno (solo si es válido y no tiene placeholders)
-                try:
-                    creds_info = json.loads(service_account_json)
-                except json.JSONDecodeError as e:
-                    raise Exception(f"Error parseando GOOGLE_SERVICE_ACCOUNT. Verifica que sea un JSON válido. Error: {str(e)}")
-                
-                # Asegurar que el private_key tenga los saltos de línea correctos
-                if 'private_key' in creds_info and isinstance(creds_info['private_key'], str):
-                    # Reemplazar \\n por \n real si es necesario (cuando viene de variable de entorno)
-                    creds_info['private_key'] = creds_info['private_key'].replace('\\n', '\n')
-                    # También manejar el caso donde viene como r'\\n'
-                    creds_info['private_key'] = creds_info['private_key'].replace('\\\\n', '\n')
-                
-                creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+                    print(f"⚠️ [GOOGLE SHEETS] Error cargando archivo {target_file}: {e}", flush=True)
             else:
-                # Mensaje de error más descriptivo
-                error_msg = "No se encontró configuración válida de Service Account.\n"
-                error_msg += "Opciones disponibles:\n"
-                error_msg += "1. GOOGLE_SA_FILE=/etc/secrets/GOOGLE_SERVICE_ACCOUNT (para Secret Files en Render)\n"
-                error_msg += "2. GOOGLE_SERVICE_ACCOUNT_B64 (JSON codificado en Base64)\n"
-                error_msg += "3. GOOGLE_SERVICE_ACCOUNT (JSON completo, sin placeholders)\n"
-                if settings.SERVICE_ACCOUNT_FILE:
-                    file_exists = os.path.exists(settings.SERVICE_ACCOUNT_FILE)
-                    error_msg += f"\nArchivo configurado: {settings.SERVICE_ACCOUNT_FILE} (existe: {file_exists})\n"
-                    if not file_exists:
-                        error_msg += "   Verifica que el Secret File esté creado en Render con el nombre correcto.\n"
-                if settings.SERVICE_ACCOUNT_JSON:
-                    json_val = settings.SERVICE_ACCOUNT_JSON.strip() if settings.SERVICE_ACCOUNT_JSON else ""
-                    if not json_val:
-                        error_msg += "\nGOOGLE_SERVICE_ACCOUNT está vacío.\n"
-                    elif '...' in json_val:
-                        error_msg += f"\nGOOGLE_SERVICE_ACCOUNT tiene placeholders (...), no se puede usar.\n"
-                    elif len(json_val) < 100:
-                        error_msg += f"\nGOOGLE_SERVICE_ACCOUNT es muy corto (length: {len(json_val)}), probablemente no es válido.\n"
-                    elif not json_val.startswith('{'):
-                        error_msg += f"\nGOOGLE_SERVICE_ACCOUNT no es un JSON válido (no empieza con {{).\n"
-                if debug_info:
-                    error_msg += "\nDebug info:\n" + "\n".join(debug_info)
-                raise Exception(error_msg)
-            
+                print(f"❌ [DEBUG] El archivo secreto NO existe en: {target_file}", flush=True)
+
+            # 2. Intentar por JSON directo (Variable de entorno)
+            if not creds:
+                json_data = settings.SERVICE_ACCOUNT_JSON or os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON') or os.getenv('GOOGLE_SERVICE_ACCOUNT')
+                if json_data and '{' in json_data:
+                    try:
+                        info = json.loads(json_data.strip())
+                        if 'private_key' in info:
+                            info['private_key'] = info['private_key'].replace('\\n', '\n')
+                        creds = Credentials.from_service_account_info(info, scopes=scopes)
+                        print("✅ Credenciales cargadas desde JSON directo")
+                    except Exception as e:
+                        print(f"⚠️ Error cargando JSON directo: {e}")
+
+            if not creds:
+                print("❌ No se pudieron cargar credenciales de Google Sheets")
+                raise ValueError("Credenciales no disponibles")
+
             self.client = gspread.authorize(creds)
             
-            # Obtener el Sheet ID desde la configuración (para certificados/compras)
-            sheet_id = settings.SHEETS['certificados']['id']
-            self.sheet = self.client.open_by_key(sheet_id).sheet1
-            self.spreadsheets['certificados'] = self.client.open_by_key(sheet_id)
+            # Inicializar spreadsheets principales
+            for key, config in settings.SHEETS.items():
+                try:
+                    self.spreadsheets[key] = self.client.open_by_key(config['id'])
+                    print(f"✅ Spreadsheet '{key}' abierto correctamente")
+                except Exception as e:
+                    print(f"⚠️ Error abriendo spreadsheet '{key}': {e}")
             
-            # Abrir también el spreadsheet de menciones
-            menciones_sheet_id = settings.SHEETS['menciones']['id']
-            self.spreadsheets['menciones'] = self.client.open_by_key(menciones_sheet_id)
+            # Set default sheet (certificados)
+            if 'certificados' in self.spreadsheets:
+                self.sheet = self.spreadsheets['certificados'].sheet1
+            
+            print("🚀 Conexión a Google Sheets completada exitosamente")
+
         except Exception as e:
+            print(f"🛑 ERROR CRÍTICO EN CONEXIÓN A GOOGLE SHEETS: {e}")
+            traceback.print_exc()
+            # No levantamos excepción para que la app no muera, pero el servicio no funcionará
+            self.client = None
             raise Exception(f"Error conectando a Google Sheets: {str(e)}")
     
     def get_all_certificates(self) -> List[Dict]:

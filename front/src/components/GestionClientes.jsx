@@ -61,16 +61,17 @@ function GestionClientes() {
     }
 
     const searchLower = searchTerm.toLowerCase().trim()
-    const filtrados = clientes.filter(cliente => {
+    const clientesArray = Array.isArray(clientes) ? clientes : []
+    const filtrados = clientesArray.filter(cliente => {
       const dni = String(cliente['DNI DEL CLIENTE'] || cliente.DNI || cliente.dni || '').toLowerCase()
       const nombre = String(cliente['NOMBRE COMPLETO DEL CLIENTE'] || cliente.NOMBRES || cliente.nombres || '').toLowerCase()
       const telefono = String(cliente['CELULAR DEL CLIENTE'] || cliente.TELEFONO || cliente.telefono || '').toLowerCase()
-      
-      return dni.includes(searchLower) || 
-             nombre.includes(searchLower) || 
-             telefono.includes(searchLower)
+
+      return dni.includes(searchLower) ||
+        nombre.includes(searchLower) ||
+        telefono.includes(searchLower)
     })
-    
+
     setClientesFiltrados(filtrados)
     setCurrentPage(1) // Resetear a primera página al buscar
   }, [searchTerm, clientes])
@@ -91,7 +92,7 @@ function GestionClientes() {
     try {
       // Preparar datos para enviar (enviar nombreCompleto directamente, sin separar)
       const payload = {}
-      
+
       if (editingCliente) {
         // Para actualizar: no enviar dni (va en la URL), solo campos que se pueden actualizar
         if (formData.nombreCompleto && String(formData.nombreCompleto).trim()) {
@@ -123,14 +124,14 @@ function GestionClientes() {
       if (editingCliente) {
         // Actualizar
         const dni = editingCliente['DNI DEL CLIENTE'] || editingCliente.DNI || editingCliente.dni
-        
+
         // Verificar que haya al menos un campo para actualizar
         if (Object.keys(payload).length === 0) {
           setError('Debe completar al menos un campo para actualizar')
           setLoading(false)
           return
         }
-        
+
         await api.put(`/admin/clientes/${dni}`, payload)
         setSuccess('Cliente actualizado exitosamente')
       } else {
@@ -138,7 +139,7 @@ function GestionClientes() {
         await api.post('/admin/clientes', payload)
         setSuccess('Cliente creado exitosamente')
       }
-      
+
       setShowForm(false)
       setEditingCliente(null)
       setFormData({
@@ -152,7 +153,7 @@ function GestionClientes() {
     } catch (err) {
       // Formatear error de validación (422)
       let errorMsg = 'Error al guardar cliente'
-      
+
       if (err.response?.data) {
         // Si hay errores de validación detallados
         if (err.response.data.errors && Array.isArray(err.response.data.errors)) {
@@ -173,7 +174,7 @@ function GestionClientes() {
       } else if (err.message) {
         errorMsg = err.message
       }
-      
+
       setError(errorMsg)
     } finally {
       setLoading(false)
@@ -182,10 +183,10 @@ function GestionClientes() {
 
   const handleEdit = (cliente) => {
     setEditingCliente(cliente)
-    
+
     // Obtener nombre completo directamente
     const nombreCompleto = cliente['NOMBRE COMPLETO DEL CLIENTE'] || cliente.NOMBRES || cliente.nombres || ''
-    
+
     setFormData({
       dni: cliente['DNI DEL CLIENTE'] || cliente.DNI || cliente.dni || '',
       nombreCompleto: nombreCompleto,
@@ -469,7 +470,7 @@ function GestionClientes() {
                   </div>
                 ))}
             </div>
-            
+
             {/* Paginación */}
             {clientesFiltrados.length > itemsPerPage && (
               <div className="pagination">
