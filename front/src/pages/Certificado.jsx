@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import api from '../utils/api'
+import api, { getApiUrl } from '../utils/api'
 import logo from '../assets/logo.png'
 import logoInst from '../assets/Logo_INST.png'
 import './Certificado.css'
@@ -59,7 +59,7 @@ function Certificado() {
   const isAnulado = certificado.estado === 'ANULADO'
   const nombreCompleto = `${certificado.nombres} ${certificado.apellidos}`
 
-  const pdfUrl = `/api/public/certificados/${codigo}/pdf`
+  const pdfUrl = getApiUrl(`/public/certificados/${codigo}/pdf`)
 
   return (
     <div className="certificado-container">
@@ -115,7 +115,7 @@ function Certificado() {
             <button onClick={handleDownloadPDF} className="btn-download">
               📄 Ver PDF Completo
             </button>
-            <button onClick={() => window.location.href = `/api/public/certificados/${codigo}/pdf?download=true`} className="btn-download-file">
+            <button onClick={() => window.location.href = getApiUrl(`/public/certificados/${codigo}/pdf?download=true`)} className="btn-download-file">
               ⬇️ Descargar Certificado Digital
             </button>
             <button onClick={() => navigate('/verificar')} className="btn-back">
@@ -130,13 +130,20 @@ function Certificado() {
             <h2>Vista Previa del Certificado</h2>
           </div>
           <div className="preview-container">
-            <iframe
-              src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0`}
-              type="application/pdf"
-              className="pdf-preview"
-              title="Vista previa del certificado"
-              frameBorder="0"
-            />
+            <div className="pdf-wrapper">
+              <iframe
+                src={`https://docs.google.com/viewer?url=${encodeURIComponent(
+                  pdfUrl.startsWith('http')
+                    ? pdfUrl
+                    : `${window.location.origin}${pdfUrl}`
+                )}&embedded=true`}
+                className="pdf-preview"
+                title="Vista previa del certificado"
+                frameBorder="0"
+                scrolling="yes"
+                allowFullScreen
+              />
+            </div>
           </div>
         </div>
       </div>

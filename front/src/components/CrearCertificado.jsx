@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import api from '../utils/api'
+import api, { getApiUrl } from '../utils/api'
 import './CrearCertificado.css'
 
 function CrearCertificado() {
@@ -328,9 +328,8 @@ function CrearCertificado() {
 
       if (codigoCertificado) {
         // Abrir el PDF en una nueva ventana
-        // Usar la URL completa del API
-        const baseUrl = window.location.origin
-        const pdfUrl = `${baseUrl}/api/public/certificados/${codigoCertificado}/pdf`
+        // Usar la función helper para construir la URL completa
+        const pdfUrl = getApiUrl(`/public/certificados/${codigoCertificado}/pdf`)
 
         // Abrir en nueva ventana
         window.open(pdfUrl, '_blank')

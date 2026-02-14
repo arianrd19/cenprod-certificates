@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import api from '../utils/api'
+import api, { getApiUrl } from '../utils/api'
 
 function PdfFullView() {
     const { codigo } = useParams()
@@ -46,7 +46,7 @@ function PdfFullView() {
     }, [codigo])
 
     // URL del PDF
-    const pdfUrl = `/api/public/certificados/${codigo}/pdf`
+    const pdfUrl = getApiUrl(`/public/certificados/${codigo}/pdf`)
 
     return (
         <div style={{ width: '100%', height: '100vh', margin: 0, padding: 0, overflow: 'hidden', backgroundColor: '#525659' }}>
