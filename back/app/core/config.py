@@ -20,6 +20,7 @@ class Config:
     
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE = int(os.getenv('RATE_LIMIT_PER_MINUTE', '60'))
+    LOGIN_RATE_LIMIT = os.getenv('LOGIN_RATE_LIMIT', '10/minute')
     
     # Sesión
     SESSION_COOKIE_HTTPONLY = True

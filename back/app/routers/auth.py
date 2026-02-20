@@ -13,7 +13,7 @@ router = APIRouter()
 
 
 @router.post("/login", response_model=Token)
-@limiter.limit("5/minute")
+@limiter.limit(settings.LOGIN_RATE_LIMIT)
 async def login(request: Request, response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
     """Endpoint de login"""
     user = authenticate_user(form_data.username, form_data.password)
