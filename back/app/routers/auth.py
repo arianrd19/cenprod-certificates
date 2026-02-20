@@ -31,12 +31,13 @@ async def login(request: Request, response: Response, form_data: OAuth2PasswordR
     )
 
     is_production = os.getenv('ENVIRONMENT', 'development') == 'production'
+    cookie_samesite = "none" if is_production else "lax"
     response.set_cookie(
         key="access_token",
         value=access_token,
         httponly=True,
         secure=is_production,
-        samesite="lax",
+        samesite=cookie_samesite,
         max_age=int(access_token_expires.total_seconds()),
         path="/",
     )
@@ -51,7 +52,14 @@ async def login(request: Request, response: Response, form_data: OAuth2PasswordR
 
 @router.post("/logout")
 async def logout(response: Response):
-    response.delete_cookie(key="access_token", path="/")
+    is_production = os.getenv('ENVIRONMENT', 'development') == 'production'
+    cookie_samesite = "none" if is_production else "lax"
+    response.delete_cookie(
+        key="access_token",
+        path="/",
+        secure=is_production,
+        samesite=cookie_samesite,
+    )
     return {"message": "Sesion cerrada"}
 
 
