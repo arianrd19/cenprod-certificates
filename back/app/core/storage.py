@@ -4,10 +4,8 @@ Soporta: Local (Hostinger), S3 (opcional)
 """
 import os
 from pathlib import Path
-from typing import Optional, BinaryIO
 from datetime import datetime
 from app.core.config import settings
-import json
 
 # Importar boto3 solo si se necesita S3 (opcional)
 try:
@@ -55,8 +53,6 @@ class StorageService:
             
             # Asegurar que la carpeta exista
             self.storage_path.mkdir(parents=True, exist_ok=True)
-            print(f"DEBUG StorageService: Ruta de almacenamiento configurada: {self.storage_path}")
-            print(f"DEBUG StorageService: Ruta absoluta: {self.storage_path.resolve()}")
             
             self.base_url = os.getenv('BASE_STORAGE_URL', f"{settings.BASE_URL}/uploads/certificados")
     
@@ -90,11 +86,9 @@ class StorageService:
         file_path = folder / safe_filename
         
         # Guardar archivo
-        print(f"DEBUG StorageService: Guardando PDF en: {file_path.resolve()}")
         with open(file_path, 'wb') as f:
             f.write(file_content)
         
-        print(f"DEBUG StorageService: PDF guardado exitosamente en: {file_path.resolve()}")
         
         # Generar URL pública
         relative_path = f"{year}/{month}/{safe_filename}"

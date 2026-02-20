@@ -1,17 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import os
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
-from app.models.schemas import UserLogin, Token, UserCreate, UserResponse
+from app.models.schemas import Token, UserCreate, UserResponse
 from app.core.security import create_access_token
-from app.core.users import authenticate_user, create_user, get_user
+from app.core.users import authenticate_user, create_user
 from app.core.config import settings
 from app.core.security import get_admin_user
+from app.core.limiter import limiter
 
 router = APIRouter()
 
 
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+@limiter.limit("5/minute")
+async def login(request: Request, response: Response, form_data: OAuth2PasswordRequestForm = Depends()):
     """Endpoint de login"""
     user = authenticate_user(form_data.username, form_data.password)
     if not user:
@@ -26,6 +29,17 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         data={"sub": user["email"], "role": user["role"]},
         expires_delta=access_token_expires
     )
+
+    is_production = os.getenv('ENVIRONMENT', 'development') == 'production'
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=is_production,
+        samesite="lax",
+        max_age=int(access_token_expires.total_seconds()),
+        path="/",
+    )
     
     return {
         "access_token": access_token,
@@ -33,6 +47,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         "role": user["role"],
         "email": user["email"]
     }
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    response.delete_cookie(key="access_token", path="/")
+    return {"message": "Sesion cerrada"}
 
 
 @router.post("/users", response_model=UserResponse, dependencies=[Depends(get_admin_user)])

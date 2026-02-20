@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Body, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
 from io import BytesIO
@@ -7,10 +7,10 @@ from app.models.schemas import (
     CertificateAnular, UserResponse
 )
 from app.core.google_sheets import sheets_service
-from app.core.security import get_operator_or_admin, get_admin_user, get_current_user
+from app.core.security import get_operator_or_admin, get_admin_user
 from app.core.config import settings
 from app.core.qr_generator import generate_qr_code
-from app.core.users import get_user, update_user_status
+from app.core.users import update_user_status
 from datetime import datetime
 
 router = APIRouter()
@@ -50,6 +50,50 @@ async def create_certificate(
         certificado_dict = certificado.model_dump()
         certificado_dict["created_at"] = datetime.now().isoformat()
         certificado_dict["updated_at"] = datetime.now().isoformat()
+
+        # Campos de libro/folio ingresados en formulario
+        anio = str(certificado_dict.get("anio") or "").strip()
+        n_folio = str(certificado_dict.get("n_folio") or "").strip()
+        n_libro = str(certificado_dict.get("n_libro") or "").strip()
+
+        # Autocompletado de campos derivados (lógica institucional):
+        # secuencia = (libro - 1) * 100 + folio
+        # N.REGISTRO = {secuencia:03d}-CENPROD-IESPPL
+        # N.CODIGO   = {secuencia:03d}-{anio}-CENPROD-IESPPL
+        if anio and n_folio and n_libro:
+            if not anio.isdigit() or len(anio) != 4:
+                raise HTTPException(status_code=400, detail="AÑO debe tener 4 dígitos")
+
+            if not n_folio.isdigit() or not n_libro.isdigit():
+                raise HTTPException(status_code=400, detail="N.FOLIO y N.LIBRO deben ser numéricos")
+
+            folio_num = int(n_folio)
+            libro_num = int(n_libro)
+            if folio_num < 1 or folio_num > 100:
+                raise HTTPException(status_code=400, detail="N.FOLIO debe estar entre 001 y 100")
+            if libro_num < 1:
+                raise HTTPException(status_code=400, detail="N.LIBRO debe ser mayor o igual a 001")
+
+            secuencia_num = (libro_num - 1) * 100 + folio_num
+            secuencia_str = f"{secuencia_num:03d}"
+
+            if not certificado_dict.get("n_registro"):
+                certificado_dict["n_registro"] = f"{secuencia_str}-CENPROD-IESPPL"
+            if not certificado_dict.get("n_codigo"):
+                certificado_dict["n_codigo"] = f"{secuencia_str}-{anio}-CENPROD-IESPPL"
+
+        # Claves equivalentes para mapeo directo hacia headers del Sheet
+        if anio:
+            certificado_dict["AÑO"] = anio
+            certificado_dict["AÃ‘O"] = anio
+        if n_folio:
+            certificado_dict["N.FOLIO"] = n_folio
+        if n_libro:
+            certificado_dict["N.LIBRO"] = n_libro
+        if certificado_dict.get("n_registro"):
+            certificado_dict["N.REGISTRO"] = str(certificado_dict["n_registro"]).strip()
+        if certificado_dict.get("n_codigo"):
+            certificado_dict["N.CODIGO"] = str(certificado_dict["n_codigo"]).strip()
         
         # nombre_completo ya está incluido en certificado_dict si viene del frontend
         
@@ -106,18 +150,15 @@ async def create_certificate(
                     if correo_cliente:
                         certificado_dict["email"] = str(correo_cliente).strip()
         except Exception as e:
+            pass
             # No bloquear la creación si falla el enriquecimiento
-            print(f"ADVERTENCIA: No se pudo enriquecer datos del cliente desde CLIENTES: {str(e)}")
         
         try:
             nuevo_certificado = sheets_service.create_certificate(certificado_dict, mencion_data=mencion_data)
         except Exception as e:
-            import traceback
-            error_trace = traceback.format_exc()
+            pass
             # Limpiar caracteres Unicode problemáticos del mensaje de error
             error_msg = str(e).encode('ascii', 'ignore').decode('ascii')
-            print(f"ERROR en create_certificate: {error_msg}")
-            print(f"Traceback: {error_trace.encode('ascii', 'ignore').decode('ascii')}")
             raise HTTPException(status_code=500, detail=f"Error creando certificado en Google Sheets: {error_msg}")
         
         verify_url = f"{settings.BASE_URL}/consulta/{nuevo_certificado.get('codigo')}"
@@ -125,9 +166,8 @@ async def create_certificate(
         # Actualizar PDF_URL en Google Sheets con la URL de verificación (la misma que usa el QR)
         try:
             sheets_service.update_certificate_pdf_url(nuevo_certificado.get('codigo'), verify_url)
-            print(f"DEBUG: PDF_URL actualizado con URL de verificación: {verify_url}")
         except Exception as e_update:
-            print(f"ADVERTENCIA: No se pudo actualizar PDF_URL en Sheets: {str(e_update)}")
+            pass
         
         # Asegurar que nombres y apellidos tengan valores válidos
         nombres = nuevo_certificado.get("nombres") or ""
@@ -144,7 +184,6 @@ async def create_certificate(
                 else:
                     nombres = nombre_completo
         
-        print(f"DEBUG create_certificate response: codigo={nuevo_certificado.get('codigo')}, nombres={nombres}, apellidos={apellidos}")
         
         # Convertir horas a string si es número
         horas_value = nuevo_certificado.get("horas")
@@ -164,9 +203,9 @@ async def create_certificate(
                 pdf_url=nuevo_certificado.get("pdf_url") or None,
                 verify_url=verify_url
             )
-            print(f"DEBUG: CertificateResponse creado exitosamente")
             return response
         except Exception as e_response:
+            pass
             # No exponer detalles del error al usuario
             raise HTTPException(status_code=500, detail="Error procesando certificado")
     except ValueError as e:
@@ -174,6 +213,7 @@ async def create_certificate(
     except HTTPException:
         raise
     except Exception as e:
+        pass
         # No exponer detalles del error al usuario
         raise HTTPException(status_code=500, detail="Error creando certificado")
 
@@ -187,14 +227,11 @@ async def download_qr(
     current_user: dict = Depends(get_operator_or_admin)
 ):
     """Descarga el código QR de un certificado (Operador/Admin)"""
-    print(f"DEBUG: download_qr llamado con codigo={codigo}")
     try:
         certificado = sheets_service.get_certificate_by_code(codigo)
         if not certificado:
-            print(f"DEBUG: Certificado no encontrado para codigo={codigo}")
             raise HTTPException(status_code=404, detail="Certificado no encontrado")
         
-        print(f"DEBUG: Generando QR para codigo={codigo}")
         qr_buffer = generate_qr_code(codigo, size=512)
         
         return StreamingResponse(
@@ -205,7 +242,6 @@ async def download_qr(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"DEBUG: Error generando QR: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error generando QR: {str(e)}")
 
 
@@ -338,9 +374,8 @@ async def unir_pdfs(
                 'FECHA_GENERACION': timestamp_generacion
             }
             sheets_service.update_certificate_fields(codigo, fields_to_update)
-            print(f"DEBUG: PDF unido guardado y campos actualizados en Sheets: PDF_URL={storage_info['url']}, CODIGO CERTIFICADO: {nombre_pdf_subido}, Fecha: {timestamp_generacion}")
         except Exception as e_update:
-            print(f"ADVERTENCIA: No se pudo actualizar campos en Sheets: {str(e_update)}")
+            pass
             # Intentar actualizar solo la URL como fallback
             try:
                 sheets_service.update_certificate_pdf_url(codigo, storage_info['url'])
@@ -357,9 +392,71 @@ async def unir_pdfs(
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error uniendo PDFs: {str(e)}")
+
+
+@router.post("/certificados/{codigo}/reemplazar-pdf")
+async def reemplazar_pdf(
+    codigo: str,
+    pdf_file: UploadFile = File(...),
+    current_user: dict = Depends(get_operator_or_admin)
+):
+    """
+    Reemplaza el PDF del certificado por uno subido manualmente.
+    """
+    try:
+        if pdf_file.content_type != 'application/pdf':
+            raise HTTPException(status_code=400, detail="El archivo debe ser un PDF")
+
+        max_file_size = 10 * 1024 * 1024  # 10MB
+        file_content = await pdf_file.read()
+        if len(file_content) > max_file_size:
+            raise HTTPException(status_code=400, detail="El archivo PDF no puede exceder 10MB")
+
+        if not file_content.startswith(b'%PDF'):
+            raise HTTPException(status_code=400, detail="El archivo no es un PDF valido")
+
+        certificado = sheets_service.get_certificate_by_code(codigo)
+        if not certificado:
+            raise HTTPException(status_code=404, detail="Certificado no encontrado")
+
+        nombre_pdf_subido = pdf_file.filename or f"pdf_reemplazo_{codigo}.pdf"
+        import re
+        nombre_pdf_subido = re.sub(r'[^a-zA-Z0-9._-]', '_', nombre_pdf_subido)
+        if nombre_pdf_subido.lower().endswith('.pdf'):
+            nombre_pdf_subido = nombre_pdf_subido[:-4]
+
+        from app.core.storage import StorageService
+        storage_service = StorageService()
+
+        filename = f"certificado_{codigo}_reemplazo.pdf"
+        storage_info = storage_service.save_pdf(
+            file_content=file_content,
+            filename=filename,
+            codigo=codigo
+        )
+
+        timestamp_generacion = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        fields_to_update = {
+            'PDF_URL': storage_info['url'],
+            'CODIGO CERTIFICADO': nombre_pdf_subido,
+            'FECHA_GENERACION': timestamp_generacion
+        }
+
+        update_ok = sheets_service.update_certificate_fields(codigo, fields_to_update)
+        if not update_ok:
+            sheets_service.update_certificate_pdf_url(codigo, storage_info['url'])
+
+        return {
+            "message": "PDF reemplazado exitosamente",
+            "codigo": codigo,
+            "pdf_url": storage_info['url']
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reemplazando PDF: {str(e)}")
 
 
 @router.get("/certificados", response_model=List[dict])

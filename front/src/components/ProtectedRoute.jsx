@@ -1,10 +1,10 @@
 import { Navigate } from 'react-router-dom'
-import { getToken } from '../utils/auth'
+import { getUser } from '../utils/auth'
 
 function ProtectedRoute({ children }) {
-  const token = getToken()
+  const user = getUser()
 
-  if (!token) {
+  if (!user) {
     return <Navigate to="/login" replace />
   }
 

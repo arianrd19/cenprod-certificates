@@ -1,5 +1,4 @@
 import qrcode
-import os
 from io import BytesIO
 from PIL import Image
 from app.core.config import settings

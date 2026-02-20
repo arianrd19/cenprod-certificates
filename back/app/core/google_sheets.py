@@ -24,7 +24,6 @@ class GoogleSheetsService:
     def _connect(self):
         """Conecta a Google Sheets usando service account"""
         try:
-            print("🔍 [DEBUG] Iniciando conexión a Google Sheets...", flush=True)
             scopes = [
                 'https://www.googleapis.com/auth/spreadsheets',
                 'https://www.googleapis.com/auth/drive'
@@ -33,19 +32,16 @@ class GoogleSheetsService:
             creds = None
             
             # Log de variables para depuración en Render
-            print(f"🔍 [DEBUG] GOOGLE_SA_FILE env: {os.getenv('GOOGLE_SA_FILE')}", flush=True)
-            print(f"🔍 [DEBUG] settings.SERVICE_ACCOUNT_FILE: {settings.SERVICE_ACCOUNT_FILE}", flush=True)
             
             # 1. Intentar por archivo (Secret File en Render)
             target_file = settings.SERVICE_ACCOUNT_FILE or '/etc/secrets/GOOGLE_SERVICE_ACCOUNT'
             if os.path.exists(target_file):
                 try:
                     creds = Credentials.from_service_account_file(target_file, scopes=scopes)
-                    print(f"✅ [GOOGLE SHEETS] Conectado usando archivo: {target_file}", flush=True)
                 except Exception as e:
-                    print(f"⚠️ [GOOGLE SHEETS] Error cargando archivo {target_file}: {e}", flush=True)
+                    pass
             else:
-                print(f"❌ [DEBUG] El archivo secreto NO existe en: {target_file}", flush=True)
+                pass
 
             # 2. Intentar por JSON directo (Variable de entorno)
             if not creds:
@@ -56,12 +52,10 @@ class GoogleSheetsService:
                         if 'private_key' in info:
                             info['private_key'] = info['private_key'].replace('\\n', '\n')
                         creds = Credentials.from_service_account_info(info, scopes=scopes)
-                        print("✅ Credenciales cargadas desde JSON directo")
                     except Exception as e:
-                        print(f"⚠️ Error cargando JSON directo: {e}")
+                        pass
 
             if not creds:
-                print("❌ No se pudieron cargar credenciales de Google Sheets")
                 raise ValueError("Credenciales no disponibles")
 
             self.client = gspread.authorize(creds)
@@ -70,18 +64,15 @@ class GoogleSheetsService:
             for key, config in settings.SHEETS.items():
                 try:
                     self.spreadsheets[key] = self.client.open_by_key(config['id'])
-                    print(f"✅ Spreadsheet '{key}' abierto correctamente")
                 except Exception as e:
-                    print(f"⚠️ Error abriendo spreadsheet '{key}': {e}")
+                    pass
             
             # Set default sheet (certificados)
             if 'certificados' in self.spreadsheets:
                 self.sheet = self.spreadsheets['certificados'].sheet1
             
-            print("🚀 Conexión a Google Sheets completada exitosamente")
 
         except Exception as e:
-            print(f"🛑 ERROR CRÍTICO EN CONEXIÓN A GOOGLE SHEETS: {e}")
             traceback.print_exc()
             # No levantamos excepción para que la app no muera, pero el servicio no funcionará
             self.client = None
@@ -108,6 +99,8 @@ class GoogleSheetsService:
             # Obtener la hoja CERTIFICADOS QR
             worksheet_qr = spreadsheet.worksheet('CERTIFICADOS QR')
             records = worksheet_qr.get_all_records()
+            # Mostrar primero los más recientes (últimas filas de la hoja)
+            records = list(reversed(records))
             
             # Mapear los campos de CERTIFICADOS QR al formato esperado por el frontend
             certificados_mapeados = []
@@ -141,6 +134,10 @@ class GoogleSheetsService:
                     'nro': record.get('NRO', '') or record.get('nro', ''),
                     'especialidad': record.get('ESPECIALIDAD', '') or record.get('especialidad', ''),
                     'p_certificado': record.get('P. CERTIFICADO', '') or record.get('p_certificado', ''),
+                            'n_folio': record.get('N.FOLIO', '') or record.get('N_FOLIO', '') or record.get('n_folio', '') or '',
+                            'n_libro': record.get('N.LIBRO', '') or record.get('N_LIBRO', '') or record.get('n_libro', '') or '',
+                            'n_registro': record.get('N.REGISTRO', '') or record.get('N_REGISTRO', '') or record.get('n_registro', '') or '',
+                            'n_codigo': record.get('N.CODIGO', '') or record.get('N_CODIGO', '') or record.get('n_codigo', '') or '',
                     'mencion': record.get('MENCIÓN', '') or record.get('mencion', ''),
                     'f_inicio': record.get('F. INICIO', '') or record.get('f_inicio', ''),
                     'f_termino': record.get('F. TÉRMINO', '') or record.get('f_termino', ''),
@@ -154,7 +151,6 @@ class GoogleSheetsService:
     def get_certificate_by_code(self, codigo: str) -> Optional[Dict]:
         """Busca un certificado por código en CERTIFICADOS QR"""
         try:
-            print(f"DEBUG get_certificate_by_code: Buscando codigo={codigo}")
             # Buscar primero en CERTIFICADOS QR (donde se guardan los certificados ahora)
             spreadsheet = self.spreadsheets.get('certificados')
             if not spreadsheet:
@@ -164,9 +160,7 @@ class GoogleSheetsService:
             
             try:
                 worksheet_qr = spreadsheet.worksheet('CERTIFICADOS QR')
-                print(f"DEBUG get_certificate_by_code: Hoja CERTIFICADOS QR obtenida")
                 records = worksheet_qr.get_all_records()
-                print(f"DEBUG get_certificate_by_code: Total de registros en CERTIFICADOS QR: {len(records)}")
                 
                 for record in records:
                     # Buscar por código (puede estar en diferentes columnas)
@@ -178,10 +172,8 @@ class GoogleSheetsService:
                     codigo_clean = str(codigo_record).strip() if codigo_record else ""
                     codigo_buscar = codigo.strip()
                     
-                    print(f"DEBUG get_certificate_by_code: Comparando '{codigo_clean}' con '{codigo_buscar}'")
                     
                     if codigo_clean and codigo_clean.lower() == codigo_buscar.lower():
-                        print(f"DEBUG get_certificate_by_code: Certificado encontrado!")
                         # Separar nombre completo en nombres y apellidos
                         nombre_completo = record.get('NOMBRE COMPLETO DEL CLIENTE', '') or record.get('NOMBRE COMPLETO', '') or ''
                         nombres = ''
@@ -218,25 +210,23 @@ class GoogleSheetsService:
                             'f_inicio': record.get('F. INICIO', '') or record.get('f_inicio', '') or '',
                             'f_termino': record.get('F. TÉRMINO', '') or record.get('F. TERMINO', '') or record.get('f_termino', '') or '',
                             'p_certificado': record.get('P. CERTIFICADO', '') or record.get('p_certificado', '') or '',
+                            'n_folio': record.get('N.FOLIO', '') or record.get('N_FOLIO', '') or record.get('n_folio', '') or '',
+                            'n_libro': record.get('N.LIBRO', '') or record.get('N_LIBRO', '') or record.get('n_libro', '') or '',
+                            'n_registro': record.get('N.REGISTRO', '') or record.get('N_REGISTRO', '') or record.get('n_registro', '') or '',
+                            'n_codigo': record.get('N.CODIGO', '') or record.get('N_CODIGO', '') or record.get('n_codigo', '') or '',
                         }
                 
-                print(f"DEBUG get_certificate_by_code: Certificado no encontrado en CERTIFICADOS QR")
             except gspread.exceptions.WorksheetNotFound:
-                print(f"DEBUG get_certificate_by_code: Hoja CERTIFICADOS QR no encontrada")
                 pass
             
             # Fallback: buscar en la hoja principal (por compatibilidad)
-            print(f"DEBUG get_certificate_by_code: Buscando en hoja principal como fallback")
             records = self.sheet.get_all_records()
             for record in records:
                 if record.get("codigo", "").strip().lower() == codigo.strip().lower():
-                    print(f"DEBUG get_certificate_by_code: Certificado encontrado en hoja principal")
                     return record
             
-            print(f"DEBUG get_certificate_by_code: Certificado no encontrado en ninguna hoja")
             return None
         except Exception as e:
-            print(f"DEBUG get_certificate_by_code: Error: {str(e)}")
             import traceback
             traceback.print_exc()
             raise Exception(f"Error buscando certificado: {str(e)}")
@@ -264,22 +254,15 @@ class GoogleSheetsService:
                     value = data.get(header, "")
                     row.append(str(value) if value else "")
                 
-                print(f"DEBUG: Guardando en hoja certificados - Headers: {headers}")
-                print(f"DEBUG: Datos a guardar: {data}")
-                print(f"DEBUG: Fila preparada: {row}")
                 
                 self.sheet.append_row(row)
-                print(f"DEBUG: Certificado guardado exitosamente en hoja principal")
             except Exception as e_main:
-                print(f"ERROR guardando en hoja principal: {str(e_main)}")
                 import traceback
                 traceback.print_exc()
                 raise Exception(f"Error guardando en hoja de certificados: {str(e_main)}")
             
             # 2. Guardar también en CERTIFICADOS QR con datos del cliente
             try:
-                print(f"DEBUG: Intentando obtener hoja 'CERTIFICADOS QR' del spreadsheet de certificados")
-                print(f"DEBUG: Spreadsheet ID: {settings.SHEETS['certificados']['id']}")
                 
                 # Obtener el spreadsheet de certificados
                 spreadsheet = self.spreadsheets.get('certificados')
@@ -290,24 +273,19 @@ class GoogleSheetsService:
                 
                 # Listar todas las hojas disponibles para debug
                 available_sheets = [ws.title for ws in spreadsheet.worksheets()]
-                print(f"DEBUG: Hojas disponibles en el spreadsheet: {available_sheets}")
                 
                 # Obtener la hoja CERTIFICADOS QR
                 worksheet_qr = spreadsheet.worksheet('CERTIFICADOS QR')
-                print(f"DEBUG: OK - Hoja 'CERTIFICADOS QR' obtenida exitosamente")
                 
                 # Obtener headers de la fila 1
                 # Verificar si la hoja tiene datos
                 all_values = worksheet_qr.get_all_values()
-                print(f"DEBUG: Total de filas en la hoja: {len(all_values)}")
                 
                 # Obtener headers de la fila 1
                 headers_qr = worksheet_qr.row_values(1) if len(all_values) > 0 else []
-                print(f"DEBUG: Headers de CERTIFICADOS QR (fila 1): {headers_qr}")
                 
                 # Si no hay headers o la hoja está vacía, crear headers básicos en la fila 1
                 if not headers_qr or all(not h.strip() for h in headers_qr if h):
-                    print(f"DEBUG: La hoja no tiene headers validos, creando headers basicos en fila 1...")
                     headers_basicos = [
                         'CODIGO', 
                         'DNI DEL CLIENTE', 
@@ -331,15 +309,12 @@ class GoogleSheetsService:
                     # Si tiene algo pero no headers válidos, actualizar la fila 1
                     if len(all_values) == 0:
                         worksheet_qr.append_row(headers_basicos)
-                        print(f"DEBUG: Headers creados con append_row (hoja vacia)")
                     else:
                         # Actualizar la fila 1 con los headers
                         for col_idx, header in enumerate(headers_basicos, start=1):
                             worksheet_qr.update_cell(1, col_idx, header)
-                        print(f"DEBUG: Headers actualizados en fila 1")
                     
                     headers_qr = headers_basicos
-                    print(f"DEBUG: Headers finales: {headers_qr}")
                 
                 # Obtener nombre completo: primero intentar desde 'nombre_completo' o 'NOMBRE COMPLETO DEL CLIENTE'
                 # Si no está, combinar nombres + apellidos del formulario
@@ -420,15 +395,12 @@ class GoogleSheetsService:
                     row_qr.append(str(value) if value else "")
                 
                 # Agregar fila a CERTIFICADOS QR
-                print(f"DEBUG: Preparando fila para CERTIFICADOS QR: {row_qr}")
                 worksheet_qr.append_row(row_qr)
-                print(f"DEBUG: OK - Certificado guardado exitosamente en CERTIFICADOS QR: codigo={data.get('codigo')}, nombre={nombre_completo}")
             except Exception as e_qr:
+                pass
                 # Si falla guardar en CERTIFICADOS QR, mostrar error detallado
                 import traceback
                 error_trace = traceback.format_exc()
-                print(f"ERROR: No se pudo guardar en CERTIFICADOS QR: {str(e_qr)}")
-                print(f"Traceback completo: {error_trace}")
                 # NO fallar la creación del certificado principal, pero mostrar el error claramente
                 # El certificado ya se guardó en la hoja principal, así que continuamos
             
@@ -437,11 +409,10 @@ class GoogleSheetsService:
                 certificado_creado = self.get_certificate_by_code(data["codigo"])
                 if not certificado_creado:
                     # Si no se encuentra, retornar los datos que se enviaron
-                    print(f"ADVERTENCIA: No se pudo recuperar el certificado recién creado, retornando datos enviados")
                     return data
                 return certificado_creado
             except Exception as e_retrieve:
-                print(f"ADVERTENCIA: Error recuperando certificado creado: {str(e_retrieve)}")
+                pass
                 # Retornar los datos que se enviaron como fallback
                 return data
         except Exception as e:
@@ -449,8 +420,6 @@ class GoogleSheetsService:
             error_trace = traceback.format_exc()
             # Limpiar caracteres Unicode problemáticos del mensaje de error
             error_msg = str(e).encode('ascii', 'ignore').decode('ascii')
-            print(f"ERROR completo en create_certificate: {error_msg}")
-            print(f"Traceback completo: {error_trace.encode('ascii', 'ignore').decode('ascii')}")
             raise Exception(f"Error creando certificado: {error_msg}")
     
     def update_certificate(self, codigo: str, data: Dict) -> Dict:
@@ -503,7 +472,6 @@ class GoogleSheetsService:
                     break
             
             if not pdf_url_col_idx:
-                print(f"ADVERTENCIA: No se encontró columna PDF_URL en CERTIFICADOS QR")
                 return False
             
             # Buscar la fila con el código
@@ -518,13 +486,10 @@ class GoogleSheetsService:
                 if codigo_clean and codigo_clean.lower() == codigo.strip().lower():
                     # Actualizar la celda PDF_URL
                     worksheet_qr.update_cell(row_idx, pdf_url_col_idx, pdf_url)
-                    print(f"DEBUG: PDF_URL actualizado para codigo={codigo}: {pdf_url}")
                     return True
             
-            print(f"ADVERTENCIA: Certificado con codigo={codigo} no encontrado en CERTIFICADOS QR")
             return False
         except Exception as e:
-            print(f"ERROR actualizando PDF_URL: {str(e)}")
             import traceback
             traceback.print_exc()
             return False
@@ -585,7 +550,6 @@ class GoogleSheetsService:
                     headers.append(new_header)
                     headers_upper.append(new_header.upper().strip())
                     last_col += 1
-                print(f"DEBUG: Nuevas columnas agregadas: {new_headers}")
             
             # Buscar la fila con el código (usando CODIGO, no CODIGO CERTIFICADO)
             for row_idx, record in enumerate(records, start=2):  # start=2 porque row 1 es header
@@ -621,16 +585,13 @@ class GoogleSheetsService:
                         
                         if col_idx:
                             worksheet_qr.update_cell(row_idx, col_idx, str(field_value))
-                            print(f"DEBUG: Campo {field_name} actualizado para codigo={codigo}: {field_value}")
                         else:
-                            print(f"ADVERTENCIA: No se encontró columna para {field_name}")
+                            pass
                     
                     return True
             
-            print(f"ADVERTENCIA: Certificado con codigo={codigo} no encontrado en CERTIFICADOS QR")
             return False
         except Exception as e:
-            print(f"ERROR actualizando campos del certificado: {str(e)}")
             import traceback
             traceback.print_exc()
             return False
@@ -722,11 +683,9 @@ class GoogleSheetsService:
         # Verificar si hay caché válido
         if not force_refresh and self._cache_menciones is not None:
             if self._cache_menciones_timestamp and (datetime.now() - self._cache_menciones_timestamp) < self._cache_ttl:
-                print("DEBUG: Retornando menciones desde caché")
                 return self._cache_menciones
         
         try:
-            print("DEBUG: Obteniendo menciones desde Google Sheets (sin caché o caché expirado)")
             worksheet = self.get_worksheet('MENCIONES', sheet_type='menciones')
             records = worksheet.get_all_records()
             
@@ -775,11 +734,9 @@ class GoogleSheetsService:
         # Verificar si hay caché válido
         if not force_refresh and self._cache_clientes is not None:
             if self._cache_clientes_timestamp and (datetime.now() - self._cache_clientes_timestamp) < self._cache_ttl:
-                print("DEBUG: Retornando clientes desde caché")
                 return self._cache_clientes
         
         try:
-            print("DEBUG: Obteniendo clientes desde Google Sheets (sin caché o caché expirado)")
             # Obtener la hoja CLIENTES del spreadsheet de clientes
             worksheet = self.get_worksheet(settings.SHEETS['clientes']['worksheets']['clientes'], sheet_type='clientes')
             records = worksheet.get_all_records()
@@ -790,6 +747,7 @@ class GoogleSheetsService:
             
             return records
         except gspread.exceptions.WorksheetNotFound:
+            pass
             # Si no encuentra la hoja, listar las hojas disponibles para debug
             spreadsheet = self.spreadsheets.get('clientes')
             if spreadsheet:
@@ -888,8 +846,6 @@ class GoogleSheetsService:
             dni_clean = dni.replace('-', '').replace('.', '').replace(' ', '').strip()
             
             # Mapear datos a los headers del Sheet
-            print(f"DEBUG google_sheets.update_cliente: data recibido: {data}")  # Debug
-            print(f"DEBUG google_sheets.update_cliente: headers del sheet: {headers}")  # Debug
             mapped_data = {}
             for header in headers:
                 if header == 'NOMBRE COMPLETO DEL CLIENTE':
@@ -897,21 +853,17 @@ class GoogleSheetsService:
                     nombre_completo = data.get('NOMBRE COMPLETO DEL CLIENTE') or data.get('nombreCompleto') or data.get('NOMBRE_COMPLETO')
                     if nombre_completo:
                         mapped_data[header] = str(nombre_completo).strip()
-                        print(f"DEBUG: Mapeado NOMBRE COMPLETO DEL CLIENTE: {mapped_data[header]}")  # Debug
                 elif header == 'CELULAR DEL CLIENTE':
                     telefono = data.get('CELULAR DEL CLIENTE') or data.get('telefono') or data.get('TELEFONO') or data.get('CELULAR')
                     if telefono:
                         mapped_data[header] = str(telefono).strip()
-                        print(f"DEBUG: Mapeado CELULAR DEL CLIENTE: {mapped_data[header]}")  # Debug
                 elif header == 'CORREO DEL CLIENTE':
                     email = data.get('CORREO DEL CLIENTE') or data.get('email') or data.get('EMAIL') or data.get('CORREO')
                     if email:
                         mapped_data[header] = str(email).strip()
-                        print(f"DEBUG: Mapeado CORREO DEL CLIENTE: {mapped_data[header]}")  # Debug
                 elif header in data and data[header]:
                     mapped_data[header] = str(data[header]).strip()
             
-            print(f"DEBUG google_sheets.update_cliente: mapped_data final: {mapped_data}")  # Debug
             
             # Encontrar la fila
             for idx, record in enumerate(records, start=2):  # start=2 porque row 1 es header
@@ -922,18 +874,15 @@ class GoogleSheetsService:
                 ).replace('-', '').replace('.', '').replace(' ', '').strip()
                 if record_dni.lower() == dni_clean.lower():
                     # Actualizar valores
-                    print(f"DEBUG: Cliente encontrado en fila {idx}, actualizando...")  # Debug
                     for header, value in mapped_data.items():
                         if header in headers:
                             col_idx = headers.index(header) + 1
-                            print(f"DEBUG: Actualizando celda [{idx}, {col_idx}] ({header}) = '{value}'")  # Debug
                             worksheet.update_cell(idx, col_idx, str(value))
                     
                     # Invalidar caché de clientes
                     self._cache_clientes = None
                     self._cache_clientes_timestamp = None
                     
-                    print(f"DEBUG: Actualización completada, obteniendo cliente actualizado...")  # Debug
                     return self.get_cliente_by_dni(dni)
             
             raise ValueError(f"Cliente con DNI {dni} no encontrado")

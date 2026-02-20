@@ -2,14 +2,13 @@
 Endpoints para procesar compras desde Google Sheets y generar certificados
 """
 from fastapi import APIRouter, Depends, HTTPException
-from typing import List, Dict, Optional
+from typing import Optional
 from app.core.google_sheets import sheets_service
 from app.core.code_generator import generate_certificate_code
 from app.core.storage import storage_service
 from app.core.pdf_generator import generate_certificate_pdf
 from app.core.security import get_operator_or_admin
 from datetime import datetime
-import os
 
 router = APIRouter()
 
@@ -159,8 +158,8 @@ async def procesar_compra(
                     fecha_procesado=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 )
         except Exception as e:
-            # Continuar aunque no se actualice Google Sheets
             pass
+            # Continuar aunque no se actualice Google Sheets
         
         return {
             "success": True,

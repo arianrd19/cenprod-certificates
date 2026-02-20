@@ -2,15 +2,15 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 import os
 
 from app.routers import public, admin, auth
 from app.core.config import settings
-
-limiter = Limiter(key_func=get_remote_address)
+from app.core.config import ROOT
+from app.core.limiter import limiter
 
 # Validar SECRET_KEY en producción
 if os.getenv('ENVIRONMENT', 'development') == 'production':
@@ -67,7 +67,18 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Content-Security-Policy"] = "default-src 'self'"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: blob: https:; "
+        "font-src 'self' data:; "
+        "connect-src 'self' https: http:; "
+        "frame-src 'self' https://docs.google.com; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "frame-ancestors 'self'"
+    )
     return response
 
 # Exception handler para errores de validación (422)
@@ -112,6 +123,11 @@ app.include_router(compras.router, prefix="/api/admin", tags=["compras"])
 # Importar router de clientes
 from app.routers import clientes
 app.include_router(clientes.router, prefix="/api/admin", tags=["clientes"])
+
+# Exponer archivos PDF almacenados localmente
+uploads_path = ROOT / "uploads"
+uploads_path.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(uploads_path)), name="uploads")
 
 
 @app.get("/")

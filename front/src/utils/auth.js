@@ -1,16 +1,14 @@
-const TOKEN_KEY = 'auth_token'
 const USER_KEY = 'user_data'
 
 export const getToken = () => {
-  return localStorage.getItem(TOKEN_KEY)
+  return null
 }
 
-export const setToken = (token) => {
-  localStorage.setItem(TOKEN_KEY, token)
+export const setToken = () => {
+  // Token is stored in HttpOnly cookie by backend.
 }
 
 export const removeToken = () => {
-  localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
 }
 

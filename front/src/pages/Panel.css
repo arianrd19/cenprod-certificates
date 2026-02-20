@@ -147,6 +147,17 @@
   border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
+.panel-main-card {
+  background: var(--color-white);
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.panel-main-card-muted {
+  background: #f1f5f9;
+}
+
 @media (max-width: 968px) {
   .panel-sidebar {
     transform: translateX(-100%);
@@ -232,5 +243,9 @@
   .panel-content>div {
     padding: 1rem;
     /* Reduced inner padding */
+  }
+
+  .panel-main-card {
+    padding: 1rem;
   }
 }

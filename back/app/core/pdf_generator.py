@@ -5,8 +5,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.lib import colors
 import qrcode
 from io import BytesIO
-from typing import Dict, Optional
-from pathlib import Path
+from typing import Dict
 from app.core.config import settings, ROOT
 
 
@@ -65,7 +64,6 @@ def generate_certificate_pdf(certificado: Dict) -> BytesIO:
     # ROOT ya apunta a back/, así que solo necesitamos plantillas/plantilla.png
     plantilla_path = ROOT / "plantillas" / "plantilla.png"
     
-    print(f"DEBUG pdf_generator: Buscando plantilla en: {plantilla_path.resolve()}")
     
     if not plantilla_path.exists():
         raise FileNotFoundError(f"Plantilla no encontrada en: {plantilla_path.resolve()}")
@@ -76,6 +74,28 @@ def generate_certificate_pdf(certificado: Dict) -> BytesIO:
     f_inicio = certificado.get('f_inicio', '') or certificado.get('F. INICIO', '') or ''
     f_termino = certificado.get('f_termino', '') or certificado.get('F. TÉRMINO', '') or certificado.get('F. TERMINO', '') or ''
     codigo = certificado.get('codigo', '') or certificado.get('CODIGO', '') or ''
+    n_registro = (
+        certificado.get('n_registro', '')
+        or certificado.get('N.REGISTRO', '')
+        or certificado.get('N_REGISTRO', '')
+        or ''
+    )
+    n_codigo = (
+        certificado.get('n_codigo', '')
+        or certificado.get('N.CODIGO', '')
+        or certificado.get('N_CODIGO', '')
+        or ''
+    )
+    n_libro = (
+        certificado.get('n_libro', '')
+        or certificado.get('N.LIBRO', '')
+        or certificado.get('N_LIBRO', '')
+        or ''
+    )
+
+    def normalize_libro(value: str) -> str:
+        raw = str(value or "").strip()
+        return raw.zfill(3) if raw.isdigit() else raw
     
     # Construir duración
     duracion = f"{horas} HORAS PEDAGÓGICAS" if horas else "HORAS PEDAGÓGICAS"
@@ -126,6 +146,9 @@ def generate_certificate_pdf(certificado: Dict) -> BytesIO:
         "periodo": periodo,
         "url": url_verificacion,
         "codigo": codigo,
+        "n_registro": str(n_registro).strip(),
+        "n_codigo": str(n_codigo).strip(),
+        "n_libro": normalize_libro(n_libro),
     }
     
     # Generar PDF
@@ -223,7 +246,7 @@ def generate_certificate_pdf(certificado: Dict) -> BytesIO:
         qr_buffer.seek(0)
         c.drawImage(ImageReader(qr_buffer), qr_x, qr_y, width=qr_w, height=qr_h)
     except Exception as e:
-        print(f"ADVERTENCIA: Error generando QR: {str(e)}")
+        pass
         # Continuar sin QR si hay error
     
     # ================= CODIGO (debajo del QR) =================
@@ -237,6 +260,32 @@ def generate_certificate_pdf(certificado: Dict) -> BytesIO:
         # Color distintivo para el código (azul oscuro)
         c.setFillColor(colors.HexColor('#1e3a5f'))
         c.drawCentredString(codigo_x, codigo_y, codigo)
+
+    # ================= DATOS EN RECUADRO (N.REGISTRO / N.CODIGO / LIBRO) =================
+    # Posiciones calibradas para el recuadro inferior derecho de la plantilla.
+    x_registro = W - 188
+    x_codigo_libro = W - 208
+    y_registro = H - 333
+    y_codigo = H - 348
+    y_libro = H - 363
+
+    box_max_width = 150
+    c.setFillColor(colors.HexColor('#1a1a1a'))
+
+    def draw_box_value(text, y, start_size=7):
+        value = str(text or "").strip()
+        font_name = "Times-Roman"
+        font_size = start_size
+        while font_size > 5.5 and pdfmetrics.stringWidth(value, font_name, font_size) > box_max_width:
+            font_size -= 0.25
+        c.setFont(font_name, font_size)
+        c.drawString(box_text_x, y, value)
+
+    box_text_x = x_registro
+    draw_box_value(datos_pdf["n_registro"], y_registro)
+    box_text_x = x_codigo_libro
+    draw_box_value(datos_pdf["n_codigo"], y_codigo)
+    draw_box_value(datos_pdf["n_libro"], y_libro)
     
     c.showPage()
     c.save()

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request, Depends
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from app.models.schemas import CertificateResponse, CertificateSearch
 from app.core.google_sheets import sheets_service
@@ -13,21 +13,16 @@ async def get_certificate(codigo: str, request: Request):
     """Obtiene un certificado por código (público)"""
     try:
         # Obtener desde Google Sheets
-        print(f"DEBUG public.get_certificate: Buscando certificado con codigo={codigo}")
         try:
             certificado = sheets_service.get_certificate_by_code(codigo)
         except Exception as e_sheets:
             import traceback
             error_trace = traceback.format_exc()
-            print(f"ERROR en get_certificate_by_code: {str(e_sheets)}")
-            print(f"Traceback: {error_trace}")
             raise HTTPException(status_code=500, detail=f"Error buscando certificado en Google Sheets: {str(e_sheets)}")
         
         if not certificado:
-            print(f"DEBUG public.get_certificate: Certificado no encontrado para codigo={codigo}")
             return CertificateResponse(found=False)
         
-        print(f"DEBUG public.get_certificate: Certificado encontrado: codigo={certificado.get('codigo')}, nombres={certificado.get('nombres')}")
         
         # Asegurar que todos los campos tengan valores válidos
         codigo_value = certificado.get("codigo") or ""
@@ -56,14 +51,15 @@ async def get_certificate(codigo: str, request: Request):
                 pdf_url=pdf_url_value,
                 verify_url=verify_url
             )
-            print(f"DEBUG public.get_certificate: Respuesta creada exitosamente")
             return response
         except Exception as e_response:
+            pass
             # No exponer detalles del error al usuario
             raise HTTPException(status_code=500, detail="Error procesando certificado")
     except HTTPException:
         raise
     except Exception as e:
+        pass
         # No exponer detalles del error al usuario
         raise HTTPException(status_code=500, detail="Error obteniendo certificado")
 
@@ -141,11 +137,11 @@ async def download_certificate_pdf(
                                 }
                             )
             except Exception as e:
-                print(f"ADVERTENCIA: No se pudo verificar archivo existente: {str(e)}")
+                pass
                 # Continuar para generar nuevo PDF
+                pass
         
         # Generar PDF dinámico
-        print(f"DEBUG: Generando PDF para certificado {codigo}")
         pdf_buffer = generate_certificate_pdf(certificado)
         pdf_content = pdf_buffer.read()
         
@@ -164,16 +160,14 @@ async def download_certificate_pdf(
                 codigo=codigo
             )
             
-            # Generar URL de verificación (la misma que usa el QR)
-            verify_url = f"{settings.BASE_URL}/consulta/{codigo}"
             
-            # Actualizar certificado en Google Sheets con la URL de verificación
+            # Actualizar certificado en Google Sheets con la URL real del PDF guardado
             try:
-                sheets_service.update_certificate_pdf_url(codigo, verify_url)
-                print(f"DEBUG: PDF guardado y URL de verificación actualizada en Sheets: {verify_url}")
+                sheets_service.update_certificate_pdf_url(codigo, storage_info['url'])
             except Exception as e_update:
-                print(f"ADVERTENCIA: No se pudo actualizar URL en Sheets: {str(e_update)}")
+                pass
                 # Continuar aunque no se actualice la URL
+                pass
             
             # Devolver el PDF guardado (no el buffer en memoria)
             # Esto asegura que siempre se devuelva el mismo PDF que se guardó
@@ -194,8 +188,9 @@ async def download_certificate_pdf(
                     )
             
         except Exception as e_storage:
-            print(f"ADVERTENCIA: No se pudo guardar PDF en almacenamiento: {str(e_storage)}")
+            pass
             # Continuar para devolver el PDF aunque no se guarde
+            pass
         
         # Fallback: devolver el PDF generado desde el buffer
         pdf_buffer.seek(0)  # Resetear buffer para lectura
@@ -214,6 +209,5 @@ async def download_certificate_pdf(
     except HTTPException:
         raise
     except Exception as e:
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error generando PDF: {str(e)}")
+

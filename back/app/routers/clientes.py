@@ -2,7 +2,7 @@
 Endpoints para gestionar clientes desde Google Sheets
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
-from typing import List, Dict, Optional
+from typing import Optional
 from app.core.google_sheets import sheets_service
 from app.core.security import get_operator_or_admin
 from pydantic import BaseModel, field_validator
@@ -56,7 +56,6 @@ async def get_clientes(
         }
     except Exception as e:
         error_msg = str(e)
-        print(f"Error en get_clientes: {error_msg}")  # Debug
         raise HTTPException(
             status_code=500, 
             detail=f"Error obteniendo clientes: {error_msg}. Verifica que la hoja 'CLIENTES' exista en el libro 'QUERYS'."
@@ -121,12 +120,9 @@ async def update_cliente(
     """Actualiza un cliente existente"""
     try:
         # Debug: imprimir lo que se recibe
-        print(f"DEBUG: Actualizando cliente DNI: {dni}")
-        print(f"DEBUG: Datos recibidos: {cliente.model_dump()}")
         
         # Convertir modelo a dict y mapear al formato del Sheet
         update_dict = cliente.model_dump(exclude_unset=True)
-        print(f"DEBUG: update_dict (exclude_unset=True): {update_dict}")
         
         # Mapear campos al formato del Sheet
         mapped_dict = {}
@@ -137,7 +133,6 @@ async def update_cliente(
         if 'telefono' in update_dict and update_dict['telefono']:
             mapped_dict['CELULAR DEL CLIENTE'] = str(update_dict['telefono']).strip()
         
-        print(f"DEBUG: mapped_dict a enviar a google_sheets: {mapped_dict}")  # Debug
         
         cliente_actualizado = sheets_service.update_cliente(dni, mapped_dict)
         return {

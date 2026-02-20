@@ -1,6 +1,7 @@
 """
 Generador de códigos únicos para certificados
 Basado en la función CERTCODE de Google Sheets:
+    pass
 - Usa timestamp + DNI o timestamp + mencion_nro + DNI
 - SHA-256 hash
 - Base64 encode
@@ -10,6 +11,7 @@ import hashlib
 import time
 import base64
 import re
+import string
 from typing import Optional
 
 

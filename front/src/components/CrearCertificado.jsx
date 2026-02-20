@@ -5,6 +5,9 @@ import './CrearCertificado.css'
 
 function CrearCertificado() {
   const navigate = useNavigate()
+  const anioOptions = Array.from({ length: 11 }, (_, index) => String(2021 + index))
+  const currentYear = new Date().getFullYear()
+  const defaultAnio = currentYear >= 2021 && currentYear <= 2031 ? String(currentYear) : '2026'
   const [loading, setLoading] = useState(false)
   const [loadingMenciones, setLoadingMenciones] = useState(false)
   const [error, setError] = useState('')
@@ -20,6 +23,9 @@ function CrearCertificado() {
     codigo: '',
     nombreCompleto: '', // Un solo campo para nombre completo
     dni: '',
+    anio: defaultAnio,
+    n_folio: '',
+    n_libro: '',
     curso: '',
     fecha_emision: new Date().toISOString().split('T')[0],
     horas: '',
@@ -196,7 +202,13 @@ function CrearCertificado() {
       return
     }
 
-    const newValue = e.target.value
+    let newValue = e.target.value
+
+    // ValidaciÃ³n: solo nÃºmeros y mÃ¡ximo 3 caracteres en N.FOLIO y N.LIBRO
+    if (e.target.name === 'n_folio' || e.target.name === 'n_libro') {
+      newValue = newValue.replace(/\D/g, '').slice(0, 3)
+    }
+
     setFormData({
       ...formData,
       [e.target.name]: newValue,
@@ -213,6 +225,22 @@ function CrearCertificado() {
       searchTimeoutRef.current = setTimeout(() => {
         buscarClientePorDNI(newValue)
       }, 1000)
+    }
+  }
+
+  const handleThreeDigitBlur = (e) => {
+    const { name, value } = e.target
+    if ((name === 'n_folio' || name === 'n_libro') && value) {
+      let normalized = value.replace(/\D/g, '').slice(0, 3)
+      if (name === 'n_folio') {
+        const folioNum = parseInt(normalized || '0', 10)
+        if (folioNum > 100) normalized = '100'
+      }
+      normalized = normalized.padStart(3, '0')
+      setFormData(prev => ({
+        ...prev,
+        [name]: normalized,
+      }))
     }
   }
 
@@ -302,12 +330,36 @@ function CrearCertificado() {
       // Convertir a string antes de hacer trim para evitar errores con null/undefined
       const dniValue = formData.dni ? String(formData.dni).trim() : null
       const horasValue = formData.horas ? String(formData.horas).trim() : null
+      const folioValue = formData.n_folio ? String(formData.n_folio).trim() : ''
+      const libroValue = formData.n_libro ? String(formData.n_libro).trim() : ''
+
+      if (!/^\d{1,3}$/.test(folioValue) || !/^\d{1,3}$/.test(libroValue)) {
+        setError('N.FOLIO y N.LIBRO deben tener solo numeros y maximo 3 digitos.')
+        setLoading(false)
+        return
+      }
+
+      const folioNum = parseInt(folioValue, 10)
+      const libroNum = parseInt(libroValue, 10)
+      if (folioNum < 1 || folioNum > 100) {
+        setError('N.FOLIO debe estar entre 001 y 100.')
+        setLoading(false)
+        return
+      }
+      if (libroNum < 1) {
+        setError('N.LIBRO debe ser mayor o igual a 001.')
+        setLoading(false)
+        return
+      }
 
       const payload = {
         codigo: formData.codigo,
         nombres: nombres || nombreCompletoFinal, // Si no se puede separar, usar todo como nombres
         apellidos: apellidos,
         dni: dniValue || null,
+        anio: formData.anio ? String(formData.anio).trim() : null,
+        n_folio: folioValue.padStart(3, '0'),
+        n_libro: libroValue.padStart(3, '0'),
         curso: formData.curso,
         fecha_emision: formData.fecha_emision,
         horas: horasValue || null,
@@ -476,57 +528,111 @@ function CrearCertificado() {
             </div>
           </div>
         )}
-
-        {/* 3) Debajo: info cliente + código + estado */}
+        {/* 3) Debajo: fila 1 (campos antiguos) + fila 2 (campos nuevos) */}
         {mencionSeleccionada && (
-          <div className="form-grid codigo-nombre-row">
-            <div className="form-group">
-              <label htmlFor="codigo">Código (auto-generado)</label>
-              <input
-                type="text"
-                id="codigo"
-                name="codigo"
-                value={formData.codigo}
-                onChange={handleChange}
-                placeholder={formData.dni ? 'Se generará automáticamente' : 'Se generará al ingresar DNI'}
-                readOnly
-                className="codigo-generated"
-              />
+          <>
+            <div className="form-grid codigo-nombre-row three-cols">
+              <div className="form-group">
+                <label htmlFor="codigo">Código (auto-generado)</label>
+                <input
+                  type="text"
+                  id="codigo"
+                  name="codigo"
+                  value={formData.codigo}
+                  onChange={handleChange}
+                  placeholder={formData.dni ? 'Se generará automáticamente' : 'Se generará al ingresar DNI'}
+                  readOnly
+                  className="codigo-generated"
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="nombreCompleto">
+                  Nombre Completo *
+                  {clienteEncontrado && <span className="client-found-badge">✓ Auto-completado</span>}
+                </label>
+                <input
+                  type="text"
+                  id="nombreCompleto"
+                  name="nombreCompleto"
+                  value={formData.nombreCompleto}
+                  onChange={handleChange}
+                  required
+                  disabled={clienteEncontrado}
+                  placeholder="Ej: Juan Pérez García"
+                  className={clienteEncontrado ? 'client-found' : ''}
+                />
+                {clienteEncontrado && <span className="locked-badge">🔒 Cargado automáticamente</span>}
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="estado">Estado *</label>
+                <select
+                  id="estado"
+                  name="estado"
+                  value={formData.estado}
+                  onChange={handleChange}
+                  required
+                >
+                  <option value="VALIDO">Válido</option>
+                  <option value="ANULADO">Anulado</option>
+                </select>
+              </div>
             </div>
 
-            <div className="form-group">
-              <label htmlFor="nombreCompleto">
-                Nombre Completo *
-                {clienteEncontrado && <span className="client-found-badge">✓ Auto-completado</span>}
-              </label>
-              <input
-                type="text"
-                id="nombreCompleto"
-                name="nombreCompleto"
-                value={formData.nombreCompleto}
-                onChange={handleChange}
-                required
-                disabled={clienteEncontrado}
-                placeholder="Ej: Juan Pérez García"
-                className={clienteEncontrado ? 'client-found' : ''}
-              />
-              {clienteEncontrado && <span className="locked-badge">🔒 Cargado automáticamente</span>}
-            </div>
+            <div className="form-grid codigo-nombre-row three-cols">
+              <div className="form-group">
+                <label htmlFor="anio">AÑO *</label>
+                <select
+                  id="anio"
+                  name="anio"
+                  value={formData.anio}
+                  onChange={handleChange}
+                  required
+                >
+                  {anioOptions.map((anioValue) => (
+                    <option key={anioValue} value={anioValue}>
+                      {anioValue}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            <div className="form-group">
-              <label htmlFor="estado">Estado *</label>
-              <select
-                id="estado"
-                name="estado"
-                value={formData.estado}
-                onChange={handleChange}
-                required
-              >
-                <option value="VALIDO">Válido</option>
-                <option value="ANULADO">Anulado</option>
-              </select>
+              <div className="form-group">
+                <label htmlFor="n_folio">N.FOLIO *</label>
+                <input
+                  type="text"
+                  id="n_folio"
+                  name="n_folio"
+                  value={formData.n_folio}
+                  onChange={handleChange}
+                  onBlur={handleThreeDigitBlur}
+                  required
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={3}
+                  placeholder="Ej: 001"
+                />
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="n_libro">N.LIBRO *</label>
+                <input
+                  type="text"
+                  id="n_libro"
+                  name="n_libro"
+                  value={formData.n_libro}
+                  onChange={handleChange}
+                  onBlur={handleThreeDigitBlur}
+                  required
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={3}
+                  placeholder="Ej: 002"
+                />
+              </div>
             </div>
-          </div>
+          </>
         )}
 
         <div className="form-actions">

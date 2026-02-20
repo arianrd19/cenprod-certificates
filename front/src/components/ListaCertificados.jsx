@@ -5,11 +5,13 @@ import ConfirmModal from './ConfirmModal'
 import './ListaCertificados.css'
 
 function ListaCertificados() {
+  const ITEMS_PER_PAGE = 15
   const [certificados, setCertificados] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
   const [showAnularModal, setShowAnularModal] = useState(false)
   const [certificadoToAnular, setCertificadoToAnular] = useState(null)
   const user = getUser()
@@ -22,6 +24,7 @@ function ListaCertificados() {
     try {
       const response = await api.get('/admin/certificados')
       setCertificados(Array.isArray(response.data) ? response.data : [])
+      setCurrentPage(1)
     } catch (err) {
       setError('Error al cargar los certificados')
     } finally {
@@ -85,6 +88,23 @@ function ListaCertificados() {
     )
   })
 
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm])
+
+  const totalPages = Math.max(1, Math.ceil(filteredCertificados.length / ITEMS_PER_PAGE))
+  const safeCurrentPage = Math.min(currentPage, totalPages)
+  const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE
+  const paginatedCertificados = filteredCertificados.slice(startIndex, startIndex + ITEMS_PER_PAGE)
+
+  const goToPreviousPage = () => {
+    setCurrentPage((prev) => Math.max(1, prev - 1))
+  }
+
+  const goToNextPage = () => {
+    setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+  }
+
   if (loading) {
     return <div className="loading">Cargando certificados...</div>
   }
@@ -134,14 +154,14 @@ function ListaCertificados() {
             </tr>
           </thead>
           <tbody>
-            {filteredCertificados.length === 0 ? (
+            {paginatedCertificados.length === 0 ? (
               <tr>
                 <td colSpan="6" className="no-data">
                   No hay certificados registrados
                 </td>
               </tr>
             ) : (
-              filteredCertificados.map((cert) => (
+              paginatedCertificados.map((cert) => (
                 <tr key={cert.codigo} className={cert.estado === 'ANULADO' ? 'anulado' : ''}>
                   <td>{cert.codigo}</td>
                   <td>
@@ -190,12 +210,12 @@ function ListaCertificados() {
 
       {/* Vista de cards para móviles */}
       <div className="certificados-cards-container">
-        {filteredCertificados.length === 0 ? (
+        {paginatedCertificados.length === 0 ? (
           <div className="no-data-card">
             No hay certificados registrados
           </div>
         ) : (
-          filteredCertificados.map((cert) => (
+          paginatedCertificados.map((cert) => (
             <div key={cert.codigo} className={`certificado-card ${cert.estado === 'ANULADO' ? 'anulado' : ''}`}>
               <div className="card-header">
                 <div className="card-title">
@@ -245,6 +265,30 @@ function ListaCertificados() {
           ))
         )}
       </div>
+
+      {filteredCertificados.length > 0 && (
+        <div className="pagination">
+          <button
+            type="button"
+            className="btn-pagination"
+            onClick={goToPreviousPage}
+            disabled={safeCurrentPage === 1}
+          >
+            Anterior
+          </button>
+          <span className="pagination-info">
+            Página {safeCurrentPage} de {totalPages}
+          </span>
+          <button
+            type="button"
+            className="btn-pagination"
+            onClick={goToNextPage}
+            disabled={safeCurrentPage === totalPages}
+          >
+            Siguiente
+          </button>
+        </div>
+      )}
     </div>
   )
 }

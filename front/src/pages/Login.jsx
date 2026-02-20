@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../utils/api'
-import { setToken, setUser } from '../utils/auth'
+import { setUser } from '../utils/auth'
 import logo from '../assets/logo.png'
 import bgImage from '../assets/2.jpeg' // Import image for the left side
 import './Login.css'
@@ -29,7 +29,6 @@ function Login() {
         },
       })
 
-      setToken(response.data.access_token)
       setUser({
         email: response.data.email,
         role: response.data.role,

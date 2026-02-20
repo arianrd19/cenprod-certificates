@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { getToken, removeToken } from './auth'
+import { removeToken } from './auth'
 
 let baseURL = import.meta.env.VITE_API_URL || '/api'
 
@@ -30,22 +30,18 @@ export const getApiUrl = (path) => {
 
 const api = axios.create({
   baseURL: baseURL.endsWith('/') ? baseURL : `${baseURL}/`,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Interceptor para agregar token y corregir rutas
+// Interceptor para corregir rutas
 api.interceptors.request.use(
   (config) => {
     // Si la URL empieza con /, se la quitamos para que se concatene correctamente con el baseURL
     if (config.url && config.url.startsWith('/')) {
       config.url = config.url.substring(1)
-    }
-
-    const token = getToken()
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
     }
     return config
   },

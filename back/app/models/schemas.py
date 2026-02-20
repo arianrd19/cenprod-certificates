@@ -1,6 +1,5 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
-from datetime import datetime
 
 
 class CertificateBase(BaseModel):
@@ -16,6 +15,11 @@ class CertificateBase(BaseModel):
     firma_url: Optional[str] = None
     logo_url: Optional[str] = None
     nombre_completo: Optional[str] = None  # Campo adicional para CERTIFICADOS QR
+    anio: Optional[str] = None
+    n_folio: Optional[str] = None
+    n_libro: Optional[str] = None
+    n_registro: Optional[str] = None
+    n_codigo: Optional[str] = None
 
 
 class CertificateCreate(CertificateBase):
@@ -33,6 +37,11 @@ class CertificateUpdate(BaseModel):
     pdf_url: Optional[str] = None
     firma_url: Optional[str] = None
     logo_url: Optional[str] = None
+    anio: Optional[str] = None
+    n_folio: Optional[str] = None
+    n_libro: Optional[str] = None
+    n_registro: Optional[str] = None
+    n_codigo: Optional[str] = None
 
 
 class CertificateResponse(BaseModel):

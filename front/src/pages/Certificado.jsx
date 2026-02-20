@@ -60,6 +60,13 @@ function Certificado() {
   const nombreCompleto = `${certificado.nombres} ${certificado.apellidos}`
 
   const pdfUrl = getApiUrl(`/public/certificados/${codigo}/pdf`)
+  const absolutePdfUrl = pdfUrl.startsWith('http')
+    ? pdfUrl
+    : `${window.location.origin}${pdfUrl}`
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  const previewUrl = isLocalhost
+    ? pdfUrl
+    : `https://docs.google.com/viewer?url=${encodeURIComponent(absolutePdfUrl)}&embedded=true`
 
   return (
     <div className="certificado-container">
@@ -132,11 +139,7 @@ function Certificado() {
           <div className="preview-container">
             <div className="pdf-wrapper">
               <iframe
-                src={`https://docs.google.com/viewer?url=${encodeURIComponent(
-                  pdfUrl.startsWith('http')
-                    ? pdfUrl
-                    : `${window.location.origin}${pdfUrl}`
-                )}&embedded=true`}
+                src={previewUrl}
                 className="pdf-preview"
                 title="Vista previa del certificado"
                 frameBorder="0"
