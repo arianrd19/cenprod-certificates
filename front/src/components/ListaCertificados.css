@@ -71,8 +71,7 @@
 
 .certificados-table tbody tr:hover {
   background: var(--color-blue-light);
-  transform: scale(1.01);
-  transition: all 0.2s ease;
+  transition: background 0.15s ease;
 }
 
 .certificados-table tbody tr.anulado {
@@ -123,8 +122,8 @@
   border-radius: 4px;
 }
 
+
 .btn-action:hover {
-  transform: scale(1.2);
   background: var(--color-gray-light);
 }
 

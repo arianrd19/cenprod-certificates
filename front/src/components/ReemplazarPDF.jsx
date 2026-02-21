@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import api from '../utils/api'
 import './UnirPDFs.css'
 
@@ -9,6 +9,14 @@ function ReemplazarPDF() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const fileInputRef = useRef(null)
+
+  const limpiarArchivoSeleccionado = () => {
+    setArchivo(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
 
   const buscarCertificado = async () => {
     const codigoLimpio = codigo.trim()
@@ -28,7 +36,7 @@ function ReemplazarPDF() {
       } else {
         setError('Certificado no encontrado')
       }
-    } catch (err) {
+    } catch (_) {
       setError('Error al buscar el certificado')
     } finally {
       setLoading(false)
@@ -40,6 +48,7 @@ function ReemplazarPDF() {
     if (file) {
       if (file.type !== 'application/pdf') {
         setError('Por favor selecciona un archivo PDF')
+        limpiarArchivoSeleccionado()
         return
       }
       setArchivo(file)
@@ -78,12 +87,9 @@ function ReemplazarPDF() {
       )
 
       setSuccess('PDF reemplazado exitosamente.')
-      setArchivo(null)
+      limpiarArchivoSeleccionado()
       setCertificado(null)
       setCodigo('')
-
-      const fileInput = document.getElementById('pdf-upload-replace')
-      if (fileInput) fileInput.value = ''
     } catch (err) {
       setError(err.response?.data?.detail || 'Error al reemplazar el PDF')
     } finally {
@@ -111,6 +117,7 @@ function ReemplazarPDF() {
               className="search-input"
             />
             <button
+              type="button"
               onClick={buscarCertificado}
               disabled={loading}
               className="btn-search"
@@ -137,6 +144,7 @@ function ReemplazarPDF() {
               accept=".pdf"
               onChange={handleFileChange}
               id="pdf-upload-replace"
+              ref={fileInputRef}
               className="file-input"
             />
             <label htmlFor="pdf-upload-replace" className="file-label">
@@ -144,14 +152,11 @@ function ReemplazarPDF() {
             </label>
             {archivo && (
               <button
-                onClick={() => {
-                  setArchivo(null)
-                  const fileInput = document.getElementById('pdf-upload-replace')
-                  if (fileInput) fileInput.value = ''
-                }}
+                type="button"
+                onClick={limpiarArchivoSeleccionado}
                 className="btn-remove-file"
               >
-                Quitar
+                X
               </button>
             )}
           </div>
@@ -162,6 +167,7 @@ function ReemplazarPDF() {
 
         <div className="form-actions">
           <button
+            type="button"
             onClick={handleReemplazarPDF}
             disabled={!certificado || !archivo || loading}
             className="btn-unir"

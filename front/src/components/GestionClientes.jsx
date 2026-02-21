@@ -416,14 +416,14 @@ function GestionClientes() {
                             onClick={() => handleEdit(cliente)}
                             title="Editar"
                           >
-                            ✏️
+                            {'\u270F\uFE0F'}
                           </button>
                           <button
                             className="btn-delete"
                             onClick={() => handleDeleteClick(cliente)}
                             title="Eliminar"
                           >
-                            🗑️
+                            {'\u{1F5D1}\uFE0F'}
                           </button>
                         </div>
                       </td>
@@ -457,14 +457,14 @@ function GestionClientes() {
                         onClick={() => handleEdit(cliente)}
                         title="Editar"
                       >
-                        ✏️ Editar
+                        {'\u270F\uFE0F'} Editar
                       </button>
                       <button
                         className="btn-delete"
                         onClick={() => handleDeleteClick(cliente)}
                         title="Eliminar"
                       >
-                        🗑️ Eliminar
+                        {'\u{1F5D1}\uFE0F'} Eliminar
                       </button>
                     </div>
                   </div>

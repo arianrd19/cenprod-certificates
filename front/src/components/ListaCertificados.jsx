@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import api from '../utils/api'
-import { getUser } from '../utils/auth'
 import ConfirmModal from './ConfirmModal'
 import './ListaCertificados.css'
 
@@ -12,9 +11,8 @@ function ListaCertificados() {
   const [success, setSuccess] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
-  const [showAnularModal, setShowAnularModal] = useState(false)
-  const [certificadoToAnular, setCertificadoToAnular] = useState(null)
-  const user = getUser()
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [certificadoToDelete, setCertificadoToDelete] = useState(null)
 
   useEffect(() => {
     fetchCertificados()
@@ -25,7 +23,7 @@ function ListaCertificados() {
       const response = await api.get('/admin/certificados')
       setCertificados(Array.isArray(response.data) ? response.data : [])
       setCurrentPage(1)
-    } catch (err) {
+    } catch (_) {
       setError('Error al cargar los certificados')
     } finally {
       setLoading(false)
@@ -44,29 +42,29 @@ function ListaCertificados() {
       document.body.appendChild(link)
       link.click()
       link.remove()
-    } catch (err) {
+    } catch (_) {
       setError('Error al descargar el QR')
     }
   }
 
-  const handleAnularClick = (codigo) => {
-    setCertificadoToAnular(codigo)
-    setShowAnularModal(true)
+  const handleDeleteClick = (codigo) => {
+    setCertificadoToDelete(codigo)
+    setShowDeleteModal(true)
   }
 
-  const handleAnularConfirm = async () => {
-    if (!certificadoToAnular) return
+  const handleDeleteConfirm = async () => {
+    if (!certificadoToDelete) return
 
     try {
-      await api.post(`/admin/certificados/${certificadoToAnular}/anular`, { motivo: 'Anulado desde panel' })
-      setShowAnularModal(false)
-      setCertificadoToAnular(null)
-      setSuccess('Certificado anulado exitosamente')
+      await api.delete(`/admin/certificados/${certificadoToDelete}`)
+      setShowDeleteModal(false)
+      setCertificadoToDelete(null)
+      setSuccess('Certificado eliminado exitosamente')
       fetchCertificados()
-    } catch (err) {
-      setError('Error al anular el certificado')
-      setShowAnularModal(false)
-      setCertificadoToAnular(null)
+    } catch (_) {
+      setError('Error al eliminar el certificado')
+      setShowDeleteModal(false)
+      setCertificadoToDelete(null)
     }
   }
 
@@ -117,18 +115,19 @@ function ListaCertificados() {
         {success && <div className="alert success">{success}</div>}
 
         <ConfirmModal
-          isOpen={showAnularModal}
+          isOpen={showDeleteModal}
           onClose={() => {
-            setShowAnularModal(false)
-            setCertificadoToAnular(null)
+            setShowDeleteModal(false)
+            setCertificadoToDelete(null)
           }}
-          onConfirm={handleAnularConfirm}
-          title="Anular Certificado"
-          message={`¿Está seguro de anular el certificado con código ${certificadoToAnular}? Esta acción marcará el certificado como anulado.`}
-          confirmText="Anular"
+          onConfirm={handleDeleteConfirm}
+          title="Eliminar Certificado"
+          message={`Esta seguro de eliminar el certificado con codigo ${certificadoToDelete}? Esta accion no se puede deshacer.`}
+          confirmText="Eliminar"
           cancelText="Cancelar"
-          type="warning"
+          type="danger"
         />
+
         <input
           type="text"
           placeholder="Buscar certificados..."
@@ -140,15 +139,14 @@ function ListaCertificados() {
 
       {error && <div className="alert error">{error}</div>}
 
-      {/* Vista de tabla para desktop */}
       <div className="certificados-table-container">
         <table className="certificados-table">
           <thead>
             <tr>
-              <th>Código</th>
+              <th>Codigo</th>
               <th>Nombre Completo</th>
               <th>Curso</th>
-              <th>Fecha Emisión</th>
+              <th>Fecha Emision</th>
               <th>Estado</th>
               <th>Acciones</th>
             </tr>
@@ -181,24 +179,22 @@ function ListaCertificados() {
                         className="btn-action btn-copy"
                         title="Copiar link"
                       >
-                        🔗
+                        {'\u{1F517}'}
                       </button>
                       <button
                         onClick={() => handleDownloadQR(cert.codigo)}
                         className="btn-action btn-qr"
                         title="Descargar QR"
                       >
-                        📱
+                        {'\u{1F4F1}'}
                       </button>
-                      {cert.estado === 'VALIDO' && (
-                        <button
-                          onClick={() => handleAnularClick(cert.codigo)}
-                          className="btn-action btn-anular"
-                          title="Anular"
-                        >
-                          ❌
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleDeleteClick(cert.codigo)}
+                        className="btn-action btn-anular"
+                        title="Eliminar"
+                      >
+                        {'\u274C'}
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -208,7 +204,6 @@ function ListaCertificados() {
         </table>
       </div>
 
-      {/* Vista de cards para móviles */}
       <div className="certificados-cards-container">
         {paginatedCertificados.length === 0 ? (
           <div className="no-data-card">
@@ -232,7 +227,7 @@ function ListaCertificados() {
                   <span className="card-value">{cert.curso}</span>
                 </div>
                 <div className="card-field">
-                  <span className="card-label">Fecha Emisión:</span>
+                  <span className="card-label">Fecha Emision:</span>
                   <span className="card-value">{cert.fecha_emision}</span>
                 </div>
               </div>
@@ -242,24 +237,22 @@ function ListaCertificados() {
                   className="btn-action btn-copy"
                   title="Copiar link"
                 >
-                  🔗 Copiar
+                  {'\u{1F517}'} Copiar
                 </button>
                 <button
                   onClick={() => handleDownloadQR(cert.codigo)}
                   className="btn-action btn-qr"
                   title="Descargar QR"
                 >
-                  📱 QR
+                  {'\u{1F4F1}'} QR
                 </button>
-                {cert.estado === 'VALIDO' && (
-                  <button
-                    onClick={() => handleAnularClick(cert.codigo)}
-                    className="btn-action btn-anular"
-                    title="Anular"
-                  >
-                    ❌ Anular
-                  </button>
-                )}
+                <button
+                  onClick={() => handleDeleteClick(cert.codigo)}
+                  className="btn-action btn-anular"
+                  title="Eliminar"
+                >
+                  {'\u274C'} Eliminar
+                </button>
               </div>
             </div>
           ))
@@ -277,7 +270,7 @@ function ListaCertificados() {
             Anterior
           </button>
           <span className="pagination-info">
-            Página {safeCurrentPage} de {totalPages}
+            Pagina {safeCurrentPage} de {totalPages}
           </span>
           <button
             type="button"

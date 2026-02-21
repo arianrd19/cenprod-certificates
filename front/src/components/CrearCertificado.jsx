@@ -204,7 +204,7 @@ function CrearCertificado() {
 
     let newValue = e.target.value
 
-    // ValidaciÃ³n: solo nÃºmeros y mÃ¡ximo 3 caracteres en N.FOLIO y N.LIBRO
+    // Validacion: solo numeros y maximo 3 caracteres en N.FOLIO y N.LIBRO
     if (e.target.name === 'n_folio' || e.target.name === 'n_libro') {
       newValue = newValue.replace(/\D/g, '').slice(0, 3)
     }
