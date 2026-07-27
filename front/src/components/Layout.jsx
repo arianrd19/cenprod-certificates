@@ -4,23 +4,16 @@ import './Layout.css'
 function Layout() {
   const location = useLocation()
 
+  const isLandingRoute = ['/', '/cursos', '/blog', '/nosotros', '/contacto', '/verificar'].includes(location.pathname)
+
   // En el panel y certificado no usamos este header/layout público (pantalla completa)
   if (location.pathname.startsWith('/panel') ||
+    location.pathname.startsWith('/dashboard') ||
     location.pathname.startsWith('/certificado/') ||
     location.pathname.startsWith('/consulta/') ||
-    location.pathname === '/login') {
+    location.pathname === '/login' ||
+    isLandingRoute) {
     return <Outlet />
-  }
-
-  // Para la página de verificar, usar layout especial con fondo de gradiente
-  if (location.pathname === '/verificar' || location.pathname === '/') {
-    return (
-      <div className="layout-verificar">
-        <main className="main-verificar">
-          <Outlet />
-        </main>
-      </div>
-    )
   }
 
   return (

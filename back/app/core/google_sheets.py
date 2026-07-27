@@ -1,9 +1,8 @@
 import gspread
-from google.oauth2.service_account import Credentials
 from typing import List, Dict, Optional
 from app.core.config import settings
+from app.core.google_credentials import load_service_account_credentials
 import os
-import json
 import traceback
 from datetime import datetime, timedelta
 
@@ -22,42 +21,9 @@ class GoogleSheetsService:
         self._connect()
     
     def _connect(self):
-        """Conecta a Google Sheets usando service account"""
+        """Conecta a Google Sheets usando la cuenta de servicio unificada."""
         try:
-            scopes = [
-                'https://www.googleapis.com/auth/spreadsheets',
-                'https://www.googleapis.com/auth/drive'
-            ]
-            
-            creds = None
-            
-            # Log de variables para depuración en Render
-            
-            # 1. Intentar por archivo (Secret File en Render)
-            target_file = settings.SERVICE_ACCOUNT_FILE or '/etc/secrets/GOOGLE_SERVICE_ACCOUNT'
-            if os.path.exists(target_file):
-                try:
-                    creds = Credentials.from_service_account_file(target_file, scopes=scopes)
-                except Exception as e:
-                    pass
-            else:
-                pass
-
-            # 2. Intentar por JSON directo (Variable de entorno)
-            if not creds:
-                json_data = settings.SERVICE_ACCOUNT_JSON or os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON') or os.getenv('GOOGLE_SERVICE_ACCOUNT')
-                if json_data and '{' in json_data:
-                    try:
-                        info = json.loads(json_data.strip())
-                        if 'private_key' in info:
-                            info['private_key'] = info['private_key'].replace('\\n', '\n')
-                        creds = Credentials.from_service_account_info(info, scopes=scopes)
-                    except Exception as e:
-                        pass
-
-            if not creds:
-                raise ValueError("Credenciales no disponibles")
-
+            creds = load_service_account_credentials()
             self.client = gspread.authorize(creds)
             
             # Inicializar spreadsheets principales
@@ -448,6 +414,33 @@ class GoogleSheetsService:
         if motivo:
             update_data["motivo_anulacion"] = motivo
         return self.update_certificate(codigo, update_data)
+
+    def delete_certificate(self, codigo: str) -> bool:
+        """Elimina un certificado de la hoja CERTIFICADOS QR por código"""
+        try:
+            spreadsheet = self.spreadsheets.get('certificados')
+            if not spreadsheet:
+                sheet_id = settings.SHEETS['certificados']['id']
+                spreadsheet = self.client.open_by_key(sheet_id)
+                self.spreadsheets['certificados'] = spreadsheet
+
+            worksheet_qr = spreadsheet.worksheet('CERTIFICADOS QR')
+            records = worksheet_qr.get_all_records()
+
+            for row_idx, record in enumerate(records, start=2):
+                codigo_record = (
+                    record.get("CODIGO", "") or
+                    record.get("CÓDIGO", "") or
+                    record.get("codigo", "")
+                )
+                codigo_clean = str(codigo_record).strip() if codigo_record else ""
+                if codigo_clean and codigo_clean.lower() == codigo.strip().lower():
+                    worksheet_qr.delete_rows(row_idx)
+                    return True
+
+            return False
+        except Exception as e:
+            raise Exception(f"Error eliminando certificado: {str(e)}")
     
     def update_certificate_pdf_url(self, codigo: str, pdf_url: str) -> bool:
         """Actualiza la URL del PDF en CERTIFICADOS QR"""

@@ -42,7 +42,7 @@ class StorageService:
             except Exception as e:
                 raise Exception(f"Error configurando S3: {str(e)}")
         elif self.storage_type == 'local':
-            storage_path = os.getenv('STORAGE_PATH', 'uploads/certificados')
+            storage_path = os.getenv('STORAGE_PATH', settings.STORAGE_PATH)
             # Si es ruta relativa, crear desde ROOT (back/)
             if not os.path.isabs(storage_path):
                 from app.core.config import ROOT
@@ -54,7 +54,7 @@ class StorageService:
             # Asegurar que la carpeta exista
             self.storage_path.mkdir(parents=True, exist_ok=True)
             
-            self.base_url = os.getenv('BASE_STORAGE_URL', f"{settings.BASE_URL}/uploads/certificados")
+            self.base_url = os.getenv('BASE_STORAGE_URL', settings.BASE_STORAGE_URL)
     
     def save_pdf(self, file_content: bytes, filename: str, codigo: str) -> dict:
         """

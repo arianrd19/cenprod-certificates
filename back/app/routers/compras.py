@@ -3,12 +3,16 @@ Endpoints para procesar compras desde Google Sheets y generar certificados
 """
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
+import logging
 from app.core.google_sheets import sheets_service
-from app.core.code_generator import generate_certificate_code
+from app.core.code_generator import generate_unique_certificate_code
 from app.core.storage import storage_service
 from app.core.pdf_generator import generate_certificate_pdf
 from app.core.security import get_operator_or_admin
+from app.core.errors import raise_safe_500
 from datetime import datetime
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -25,7 +29,7 @@ async def get_compras_pendientes(
             "compras": compras
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo compras: {str(e)}")
+        raise_safe_500(_log, "Error obteniendo compras", e)
 
 
 @router.post("/compras/{row_index}/procesar")
@@ -77,14 +81,15 @@ async def procesar_compra(
             raise HTTPException(status_code=404, detail=f"Mención con NRO {mencion_nro} no encontrada")
         mencion_text = mencion_data.get('MENCIÓN', '')
         
-        # Generar código único
-        codigo = generate_certificate_code(dni=dni)
-        
-        # Verificar que el código no exista en Sheets
-        cert_sheets = sheets_service.get_certificate_by_code(codigo)
-        if cert_sheets:
-            codigo = generate_certificate_code(dni=dni)
-        
+        # Generar código único (reintenta con salt si ya existe en Sheets)
+        try:
+            codigo = generate_unique_certificate_code(
+                code_exists=lambda c: bool(sheets_service.get_certificate_by_code(c)),
+                dni=dni,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=500, detail=str(e))
+
         # Usar horas de la mención si está disponible, sino usar horas de la compra
         horas_final = horas
         if mencion_data and mencion_data.get('HORAS'):
@@ -134,7 +139,7 @@ async def procesar_compra(
         try:
             sheets_service.create_certificate(certificado_dict, mencion_data=mencion_data)
         except Exception as e_sheets:
-            raise HTTPException(status_code=500, detail=f"Error guardando certificado en Google Sheets: {str(e_sheets)}")
+            raise_safe_500(_log, "Error guardando certificado en Google Sheets", e_sheets)
         
         # Actualizar Google Sheets con el código generado
         try:
@@ -179,7 +184,7 @@ async def procesar_compra(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error procesando compra: {str(e)}")
+        raise_safe_500(_log, "Error procesando compra", e)
 
 
 @router.get("/menciones")
@@ -216,7 +221,7 @@ async def get_menciones(
             ]
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo menciones desde Sheets: {str(e)}")
+        raise_safe_500(_log, "Error obteniendo menciones desde Sheets", e)
 
 
 @router.get("/menciones/{nro}")
@@ -247,4 +252,4 @@ async def get_mencion_by_nro(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo mención: {str(e)}")
+        raise_safe_500(_log, "Error obteniendo mención", e)

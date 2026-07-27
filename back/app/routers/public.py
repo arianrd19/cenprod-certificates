@@ -1,14 +1,23 @@
+import logging
+from io import BytesIO
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from app.models.schemas import CertificateResponse, CertificateSearch
 from app.core.google_sheets import sheets_service
 from app.core.config import settings
 from app.core.pdf_generator import generate_certificate_pdf
+from app.core.errors import raise_safe_500
+from app.core.limiter import limiter
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter()
 
+PUBLIC_RATE_LIMIT = f"{settings.RATE_LIMIT_PER_MINUTE}/minute"
+
 
 @router.get("/certificados/{codigo}", response_model=CertificateResponse)
+@limiter.limit(PUBLIC_RATE_LIMIT)
 async def get_certificate(codigo: str, request: Request):
     """Obtiene un certificado por código (público)"""
     try:
@@ -16,9 +25,7 @@ async def get_certificate(codigo: str, request: Request):
         try:
             certificado = sheets_service.get_certificate_by_code(codigo)
         except Exception as e_sheets:
-            import traceback
-            error_trace = traceback.format_exc()
-            raise HTTPException(status_code=500, detail=f"Error buscando certificado en Google Sheets: {str(e_sheets)}")
+            raise_safe_500(_log, "Error buscando certificado en Google Sheets", e_sheets)
         
         if not certificado:
             return CertificateResponse(found=False)
@@ -65,6 +72,7 @@ async def get_certificate(codigo: str, request: Request):
 
 
 @router.post("/buscar", response_model=CertificateResponse)
+@limiter.limit(PUBLIC_RATE_LIMIT)
 async def search_certificate(search: CertificateSearch, request: Request):
     """Busca un certificado por código (público)"""
     try:
@@ -88,126 +96,64 @@ async def search_certificate(search: CertificateSearch, request: Request):
             verify_url=verify_url
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error buscando certificado: {str(e)}")
+        raise_safe_500(_log, "Error buscando certificado", e)
 
 
 @router.get("/certificados/{codigo}/pdf")
+@limiter.limit(PUBLIC_RATE_LIMIT)
 async def download_certificate_pdf(
-    codigo: str, 
-    request: Request, 
+    codigo: str,
+    request: Request,
     force_regenerate: bool = False,
     download: bool = False
 ):
-    """Descarga el PDF del certificado (público). Si no existe, lo genera y guarda."""
+    """
+    Descarga el PDF del certificado (público). Siempre se genera/sirve al vuelo,
+    nunca se guarda en el servidor. Si el certificado tiene una versión unida o
+    reemplazada manualmente (subida a Drive por un operador), se sirve esa en su
+    lugar; de lo contrario se genera desde los datos de la hoja.
+    """
     try:
         certificado = sheets_service.get_certificate_by_code(codigo)
-        
+
         if not certificado:
             raise HTTPException(status_code=404, detail="Certificado no encontrado")
-        
-        # Determinar disposición (ver o descargar)
+
         disposition_type = "attachment" if download else "inline"
-        
-        # Si hay pdf_url y el archivo existe, y no se fuerza regeneración, redirigir a ese
+        nombre_completo = f"{certificado.get('nombres', '')}_{certificado.get('apellidos', '')}"
+        filename = f"certificado_{nombre_completo.replace(' ', '_')}.pdf"
+
         pdf_url = certificado.get("pdf_url")
-        if pdf_url and not force_regenerate:
-            # Verificar si el archivo existe localmente
-            try:
-                from app.core.storage import StorageService
-                storage_service = StorageService()
-                if storage_service.storage_type == 'local':
-                    # Verificar si el archivo existe
-                    import os
-                    from pathlib import Path
-                    from app.core.config import ROOT
-                    # Extraer ruta relativa de la URL
-                    if '/uploads/certificados/' in pdf_url:
-                        relative_path = pdf_url.split('/uploads/certificados/')[-1]
-                        file_path = ROOT / 'uploads' / 'certificados' / relative_path
-                        if file_path.exists():
-                            from fastapi.responses import FileResponse
-                            nombre_completo = f"{certificado.get('nombres', '')}_{certificado.get('apellidos', '')}"
-                            filename = f"certificado_{nombre_completo.replace(' ', '_')}.pdf"
-                            return FileResponse(
-                                str(file_path),
-                                media_type="application/pdf",
-                                headers={
-                                    "Content-Disposition": f"{disposition_type}; filename={filename}",
-                                    "X-Content-Type-Options": "nosniff"
-                                }
-                            )
-            except Exception as e:
-                pass
-                # Continuar para generar nuevo PDF
-                pass
-        
-        # Generar PDF dinámico
-        pdf_buffer = generate_certificate_pdf(certificado)
-        pdf_content = pdf_buffer.read()
-        
-        # Guardar PDF en el backend
-        try:
-            from app.core.storage import StorageService
-            storage_service = StorageService()
-            
-            nombre_completo = certificado.get('nombre_completo') or f"{certificado.get('nombres', '')} {certificado.get('apellidos', '')}"
-            filename = f"certificado_{codigo}.pdf"
-            
-            # Guardar PDF
-            storage_info = storage_service.save_pdf(
-                file_content=pdf_content,
-                filename=filename,
-                codigo=codigo
-            )
-            
-            
-            # Actualizar certificado en Google Sheets con la URL real del PDF guardado
-            try:
-                sheets_service.update_certificate_pdf_url(codigo, storage_info['url'])
-            except Exception as e_update:
-                pass
-                # Continuar aunque no se actualice la URL
-                pass
-            
-            # Devolver el PDF guardado (no el buffer en memoria)
-            # Esto asegura que siempre se devuelva el mismo PDF que se guardó
-            if storage_service.storage_type == 'local':
-                relative_path = storage_info['relative_path']
-                file_path = storage_service.storage_path / relative_path
-                if file_path.exists():
-                    from fastapi.responses import FileResponse
-                    nombre_completo = f"{certificado.get('nombres', '')}_{certificado.get('apellidos', '')}"
-                    filename = f"certificado_{nombre_completo.replace(' ', '_')}.pdf"
-                    return FileResponse(
-                        str(file_path),
+        if pdf_url and "drive.google.com" in pdf_url and not force_regenerate:
+            from app.core.google_drive import extract_file_id, download_file_bytes
+            file_id = extract_file_id(pdf_url)
+            if file_id:
+                try:
+                    pdf_content = download_file_bytes(file_id)
+                    return StreamingResponse(
+                        BytesIO(pdf_content),
                         media_type="application/pdf",
                         headers={
                             "Content-Disposition": f"{disposition_type}; filename={filename}",
                             "X-Content-Type-Options": "nosniff"
                         }
                     )
-            
-        except Exception as e_storage:
-            pass
-            # Continuar para devolver el PDF aunque no se guarde
-            pass
-        
-        # Fallback: devolver el PDF generado desde el buffer
-        pdf_buffer.seek(0)  # Resetear buffer para lectura
-        nombre_completo = f"{certificado.get('nombres', '')}_{certificado.get('apellidos', '')}"
-        filename = f"certificado_{nombre_completo.replace(' ', '_')}.pdf"
-        
+                except Exception as e_drive:
+                    _log.warning("No se pudo servir PDF desde Drive para %s: %s", codigo, e_drive)
+                    # Continuar y generar el PDF estándar como respaldo
+
+        # Generar PDF al vuelo a partir de los datos de la hoja (no se guarda en ningún lado)
+        pdf_buffer = generate_certificate_pdf(certificado)
         return StreamingResponse(
             pdf_buffer,
             media_type="application/pdf",
             headers={
                 "Content-Disposition": f"{disposition_type}; filename={filename}",
-                "Content-Type": "application/pdf",
                 "X-Content-Type-Options": "nosniff"
             }
         )
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generando PDF: {str(e)}")
+        raise_safe_500(_log, "Error generando PDF", e)
 

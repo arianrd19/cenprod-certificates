@@ -3,7 +3,135 @@ import { useParams, useNavigate } from 'react-router-dom'
 import api, { getApiUrl } from '../utils/api'
 import logo from '../assets/logo.png'
 import logoInst from '../assets/Logo_INST.png'
+import LandingPublicLayout from '../landing/LandingPublicLayout'
+import Icon from '../landing/icons.jsx'
+import CertPdfPreview from '../components/CertPdfPreview'
 import './Certificado.css'
+
+function CertificadoContent({ loading, error, certificado, codigo, navigate }) {
+  if (loading) {
+    return (
+      <div className="cert-status cert-status--loading">
+        <p>Cargando certificado…</p>
+      </div>
+    )
+  }
+
+  if (error || !certificado) {
+    return (
+      <div className="cert-status cert-status--error">
+        <Icon name="x" size={28} stroke="#ef4444" />
+        <h2>Certificado no encontrado</h2>
+        <p>{error || 'El certificado solicitado no existe o ha sido eliminado.'}</p>
+        <button type="button" className="btn btn--primary" onClick={() => navigate('/verificar')}>
+          Volver a verificar <Icon name="arrow-right" size={16} />
+        </button>
+      </div>
+    )
+  }
+
+  const isAnulado = certificado.estado === 'ANULADO'
+  const nombreCompleto = `${certificado.nombres} ${certificado.apellidos}`.trim()
+
+  const pdfUrl = getApiUrl(`/public/certificados/${codigo}/pdf`)
+
+  const handleDownloadPDF = () => {
+    window.open(`/pdf/${codigo}`, '_blank')
+  }
+
+  return (
+    <section className="cert-page">
+      <div className="cert-page__inner">
+        <header className="cert-intro">
+          <span className="eyebrow eyebrow--dark">
+            <span className="dot" />
+            {isAnulado ? 'Certificado anulado' : 'Certificado verificado'}
+          </span>
+          <div className="cert-intro__main">
+            <h1 className="cert-intro__title">
+              {isAnulado ? (
+                <>Este certificado <em>no es válido.</em></>
+              ) : (
+                <>Certificado <em>auténtico.</em></>
+              )}
+            </h1>
+            <p className="cert-intro__sub">
+              {isAnulado
+                ? 'El código existe en el sistema pero fue marcado como anulado.'
+                : 'Los datos coinciden con nuestros registros oficiales de CENPROD.'}
+            </p>
+          </div>
+        </header>
+
+        {isAnulado && (
+          <div className="cert-alert-anulado">
+            <strong>Certificado anulado</strong>
+            <p>Este documento ya no tiene validez oficial.</p>
+          </div>
+        )}
+
+        <div className="cert-layout">
+          <aside className="cert-info">
+            <div className="cert-info__head">
+              <img src={logo} alt="CENPROD" className="cert-info__logo" />
+              <div>
+                <h2>Datos del certificado</h2>
+                <span className={`cert-badge ${isAnulado ? 'cert-badge--bad' : 'cert-badge--ok'}`}>
+                  {isAnulado ? 'Anulado' : 'Válido'}
+                </span>
+              </div>
+              <img src={logoInst} alt="Institución" className="cert-info__logo cert-info__logo--inst" />
+            </div>
+
+            <dl className="cert-dl">
+              <div>
+                <dt>Nombre completo</dt>
+                <dd className="cert-dl__highlight">{nombreCompleto}</dd>
+              </div>
+              <div>
+                <dt>Curso</dt>
+                <dd>{certificado.curso}</dd>
+              </div>
+              {certificado.horas && (
+                <div>
+                  <dt>Duración</dt>
+                  <dd>{certificado.horas} horas</dd>
+                </div>
+              )}
+              <div>
+                <dt>Fecha de emisión</dt>
+                <dd>{certificado.fecha_emision}</dd>
+              </div>
+              <div>
+                <dt>Código</dt>
+                <dd className="cert-dl__code">{certificado.codigo}</dd>
+              </div>
+            </dl>
+
+            <div className="cert-actions">
+              <button type="button" className="btn btn--primary btn--full" onClick={handleDownloadPDF}>
+                <Icon name="book" size={16} /> Ver PDF completo
+              </button>
+              <a
+                className="btn btn--green btn--full"
+                href={getApiUrl(`/public/certificados/${codigo}/pdf?download=true`)}
+              >
+                <Icon name="download" size={16} /> Descargar certificado
+              </a>
+              <button type="button" className="btn btn--ghost-dark btn--full" onClick={() => navigate('/verificar')}>
+                <Icon name="search" size={16} /> Verificar otro
+              </button>
+            </div>
+          </aside>
+
+          <section className="cert-preview" aria-label="Vista previa del certificado">
+            <CertPdfPreview url={pdfUrl} />
+          </section>
+        </div>
+      </div>
+    </section>
+  )
+}
 
 function Certificado() {
   const { codigo } = useParams()
@@ -21,7 +149,7 @@ function Certificado() {
         } else {
           setError('Certificado no encontrado')
         }
-      } catch (err) {
+      } catch (_) {
         setError('Error al cargar el certificado')
       } finally {
         setLoading(false)
@@ -31,126 +159,18 @@ function Certificado() {
     fetchCertificado()
   }, [codigo])
 
-  const handleDownloadPDF = () => {
-    // Abrir PDF en nueva pestaña usando el visor personalizado del frontend
-    // Esto mantiene el favicon y permite titulo personalizado
-    window.open(`/pdf/${codigo}`, '_blank')
-  }
-
-  if (loading) {
-    return (
-      <div className="certificado-container">
-        <div className="loading">Cargando certificado...</div>
-      </div>
-    )
-  }
-
-  if (error || !certificado) {
-    return (
-      <div className="certificado-container">
-        <div className="error-card">
-          <h2>Certificado no encontrado</h2>
-          <p>{error || 'El certificado solicitado no existe o ha sido eliminado.'}</p>
-        </div>
-      </div>
-    )
-  }
-
-  const isAnulado = certificado.estado === 'ANULADO'
-  const nombreCompleto = `${certificado.nombres} ${certificado.apellidos}`
-
-  const pdfUrl = getApiUrl(`/public/certificados/${codigo}/pdf`)
-  const absolutePdfUrl = pdfUrl.startsWith('http')
-    ? pdfUrl
-    : `${window.location.origin}${pdfUrl}`
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  const previewUrl = isLocalhost
-    ? pdfUrl
-    : `https://docs.google.com/viewer?url=${encodeURIComponent(absolutePdfUrl)}&embedded=true`
-
   return (
-    <div className="certificado-container">
-      <div className="certificado-layout">
-        {/* Columna izquierda: Información del certificado */}
-        <div className="certificado-info-panel">
-          {isAnulado && (
-            <div className="alert-anulado">
-              <strong>⚠️ Certificado Anulado</strong>
-              <p>Este certificado ha sido anulado y no es válido.</p>
-            </div>
-          )}
-
-          <div className="info-header">
-            <img src={logo} alt="Logo" className="header-logo" />
-            <div className="header-title">
-              <h1>CERTIFICADO</h1>
-              <p className="info-subtitle">Verificación Digital</p>
-            </div>
-            <img src={logoInst} alt="Logo Institucional" className="header-logo" />
-          </div>
-
-          <div className="info-content">
-            <div className="info-section">
-              <div className="info-label">Nombre Completo</div>
-              <div className="info-value nombre">{nombreCompleto}</div>
-            </div>
-
-            <div className="info-section">
-              <div className="info-label">Curso</div>
-              <div className="info-value curso">{certificado.curso}</div>
-            </div>
-
-            {certificado.horas && (
-              <div className="info-section">
-                <div className="info-label">Duración</div>
-                <div className="info-value">{certificado.horas} horas</div>
-              </div>
-            )}
-
-            <div className="info-section">
-              <div className="info-label">Fecha de Emisión</div>
-              <div className="info-value">{certificado.fecha_emision}</div>
-            </div>
-
-            <div className="info-section">
-              <div className="info-label">Código de Verificación</div>
-              <div className="info-value codigo">{certificado.codigo}</div>
-            </div>
-          </div>
-
-          <div className="info-actions">
-            <button onClick={handleDownloadPDF} className="btn-download">
-              📄 Ver PDF Completo
-            </button>
-            <button onClick={() => window.location.href = getApiUrl(`/public/certificados/${codigo}/pdf?download=true`)} className="btn-download-file">
-              ⬇️ Descargar Certificado Digital
-            </button>
-            <button onClick={() => navigate('/verificar')} className="btn-back">
-              🔍 Verificar Otro Certificado
-            </button>
-          </div>
-        </div>
-
-        {/* Columna derecha: Previsualización del PDF */}
-        <div className="certificado-preview-panel">
-          <div className="preview-header">
-            <h2>Vista Previa del Certificado</h2>
-          </div>
-          <div className="preview-container">
-            <div className="pdf-wrapper">
-              <iframe
-                src={previewUrl}
-                className="pdf-preview"
-                title="Vista previa del certificado"
-                frameBorder="0"
-                scrolling="yes"
-                allowFullScreen
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <LandingPublicLayout activePage="verificar">
+      <article className="page page--cert" data-screen-label="Certificado">
+        <CertificadoContent
+          loading={loading}
+          error={error}
+          certificado={certificado}
+          codigo={codigo}
+          navigate={navigate}
+        />
+      </article>
+    </LandingPublicLayout>
   )
 }
 

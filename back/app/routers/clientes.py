@@ -1,11 +1,15 @@
 """
 Endpoints para gestionar clientes desde Google Sheets
 """
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 from app.core.google_sheets import sheets_service
 from app.core.security import get_operator_or_admin
+from app.core.errors import raise_safe_500
 from pydantic import BaseModel, field_validator
+
+_log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -55,11 +59,7 @@ async def get_clientes(
             "clientes": clientes
         }
     except Exception as e:
-        error_msg = str(e)
-        raise HTTPException(
-            status_code=500, 
-            detail=f"Error obteniendo clientes: {error_msg}. Verifica que la hoja 'CLIENTES' exista en el libro 'QUERYS'."
-        )
+        raise_safe_500(_log, "Error obteniendo clientes. Verifica que la hoja 'CLIENTES' exista.", e)
 
 
 @router.get("/clientes/{dni}")
@@ -76,7 +76,7 @@ async def get_cliente_by_dni(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo cliente: {str(e)}")
+        raise_safe_500(_log, "Error obteniendo cliente", e)
 
 
 @router.post("/clientes")
@@ -108,7 +108,7 @@ async def create_cliente(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error creando cliente: {str(e)}")
+        raise_safe_500(_log, "Error creando cliente", e)
 
 
 @router.put("/clientes/{dni}")
@@ -143,7 +143,7 @@ async def update_cliente(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error actualizando cliente: {str(e)}")
+        raise_safe_500(_log, "Error actualizando cliente", e)
 
 
 @router.delete("/clientes/{dni}")
@@ -163,4 +163,4 @@ async def delete_cliente(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error eliminando cliente: {str(e)}")
+        raise_safe_500(_log, "Error eliminando cliente", e)

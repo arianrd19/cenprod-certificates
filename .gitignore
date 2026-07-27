@@ -10,17 +10,22 @@ env/
 
 # Node
 node_modules/
-dist/
 dist-ssr/
 *.local
 
 # Secrets
 service_account.json
-*.json
-!package.json
-!composer.json
-!tsconfig.json
+back/path/service_account.json
+*.key.json
+
+# Uploads
+back/uploads/
+*.pdf
 
 # OS
 .DS_Store
 Thumbs.db
+
+# Legacy
+../cenprod/
+../cenprod-certificates/

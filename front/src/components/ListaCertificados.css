@@ -16,30 +16,37 @@
 .lista-header h2 {
   color: var(--color-dark);
   font-weight: 700;
+  font-size: clamp(1.25rem, 2vw, 1.65rem);
+  letter-spacing: -0.02em;
 }
 
 .search-input {
-  padding: 0.75rem;
-  border: 2px solid var(--color-gray-light);
-  border-radius: 8px;
-  font-size: 1rem;
-  min-width: 250px;
-  transition: all 0.2s;
+  padding: 0.78rem 1rem;
+  border: 1.5px solid #e2e8f0;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  min-width: 280px;
+  transition: border-color 0.2s, box-shadow 0.2s;
   background: var(--color-white);
+  color: var(--color-dark);
 }
 
 .search-input:focus {
   border-color: var(--color-green);
-  box-shadow: 0 0 0 3px rgba(36, 188, 87, 0.1);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14);
   outline: none;
+}
+
+.search-input::placeholder {
+  color: #94a3b8;
 }
 
 .certificados-table-container {
   overflow-x: auto;
   background: var(--color-white);
-  border-radius: 16px;
-  box-shadow: var(--shadow-lg);
-  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  border: 1px solid rgba(15, 23, 42, 0.05);
   overflow-y: hidden;
 }
 
@@ -54,19 +61,27 @@
 }
 
 .certificados-table th {
-  padding: 1rem;
+  padding: 0.95rem 1.1rem;
   text-align: left;
   font-weight: 700;
   color: var(--color-white);
   border-bottom: none;
   text-transform: uppercase;
-  font-size: 0.875rem;
-  letter-spacing: 0.5px;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
 }
 
 .certificados-table td {
-  padding: 1rem;
+  padding: 0.9rem 1.1rem;
   border-bottom: 1px solid var(--color-gray-light);
+}
+
+.certificados-table tbody tr:nth-child(even) {
+  background: rgba(248, 250, 252, 0.7);
+}
+
+.certificados-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .certificados-table tbody tr:hover {
@@ -87,17 +102,18 @@
 }
 
 .badge {
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  font-size: 0.875rem;
-  font-weight: 600;
+  padding: 0.28rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .badge.valido {
   background: var(--color-green-light);
   color: var(--color-green-dark);
-  font-weight: 600;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .badge.anulado {
@@ -113,18 +129,20 @@
 }
 
 .btn-action {
-  background: none;
-  border: none;
-  font-size: 1.2rem;
-  padding: 0.5rem;
+  background: var(--color-gray-light);
+  border: 1px solid transparent;
+  font-size: 1.05rem;
+  padding: 0.45rem 0.55rem;
   cursor: pointer;
   transition: all 0.2s;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
-
 .btn-action:hover {
-  background: var(--color-gray-light);
+  background: var(--color-white);
+  border-color: #e2e8f0;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-copy:hover {

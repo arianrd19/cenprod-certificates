@@ -75,6 +75,10 @@ class Token(BaseModel):
     token_type: str
     role: str
     email: str
+    rol: Optional[str] = None
+    nombre: Optional[str] = None
+    codigo: Optional[str] = None
+    username: Optional[str] = None
 
 
 class UserCreate(BaseModel):

@@ -1,3 +1,4 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from typing import List, Optional
@@ -10,10 +11,24 @@ from app.core.google_sheets import sheets_service
 from app.core.security import get_operator_or_admin, get_admin_user
 from app.core.config import settings
 from app.core.qr_generator import generate_qr_code
-from app.core.users import update_user_status
+from app.core.users import list_all_users
+from app.core.errors import raise_safe_500
 from datetime import datetime
 
+_log = logging.getLogger(__name__)
+
 router = APIRouter()
+
+
+def _first_sheet_value(data: Optional[dict], keys: List[str], default: str = "") -> str:
+    """Return first non-empty value from a list of possible sheet headers."""
+    if not data:
+        return default
+    for key in keys:
+        value = data.get(key)
+        if value not in (None, ""):
+            return value
+    return default
 
 
 @router.post("/certificados", response_model=CertificateResponse)
@@ -27,24 +42,28 @@ async def create_certificate(
     
     Args:
         certificado: Datos del certificado
-        mencion_nro: NRO de la mención desde Google Sheets (ej: "101")
+        mencion_nro: NRO de la mencion desde Google Sheets (ej: "101")
     """
     try:
-        # Obtener datos de la mención si se proporciona
+        # Obtener datos de la mencion si se proporciona
         mencion_data = None
         mencion_text = ""
         
         if mencion_nro:
             mencion_data = sheets_service.get_mencion_by_nro(mencion_nro)
             if mencion_data:
-                mencion_text = mencion_data.get('MENCIÓN', '')
-                # Si no se proporcionaron horas o curso, usar los de la mención
+                mencion_text = _first_sheet_value(mencion_data, ["MENCI\u00d3N", "MENCION"], "")
+                # Si no se proporcionaron horas o curso, usar los de la mencion
                 if not certificado.horas and mencion_data.get('HORAS'):
                     certificado.horas = mencion_data.get('HORAS')
                 if not certificado.curso and mencion_data.get('P. CERTIFICADO'):
                     certificado.curso = mencion_data.get('P. CERTIFICADO')
-                if not certificado.fecha_emision and mencion_data.get('F. EMISIÓN'):
-                    certificado.fecha_emision = mencion_data.get('F. EMISIÓN', '')
+                if not certificado.fecha_emision and _first_sheet_value(
+                    mencion_data, ["F. EMISI\u00d3N", "F. EMISION", "FECHA EMISI\u00d3N", "FECHA EMISION"], ""
+                ):
+                    certificado.fecha_emision = _first_sheet_value(
+                        mencion_data, ["F. EMISI\u00d3N", "F. EMISION", "FECHA EMISI\u00d3N", "FECHA EMISION"], ""
+                    )
         
         # Usar directamente Google Sheets
         certificado_dict = certificado.model_dump()
@@ -56,16 +75,16 @@ async def create_certificate(
         n_folio = str(certificado_dict.get("n_folio") or "").strip()
         n_libro = str(certificado_dict.get("n_libro") or "").strip()
 
-        # Autocompletado de campos derivados (lógica institucional):
+        # Autocompletado de campos derivados (logica institucional):
         # secuencia = (libro - 1) * 100 + folio
         # N.REGISTRO = {secuencia:03d}-CENPROD-IESPPL
         # N.CODIGO   = {secuencia:03d}-{anio}-CENPROD-IESPPL
         if anio and n_folio and n_libro:
             if not anio.isdigit() or len(anio) != 4:
-                raise HTTPException(status_code=400, detail="AÑO debe tener 4 dígitos")
+                raise HTTPException(status_code=400, detail="ANIO debe tener 4 digitos")
 
             if not n_folio.isdigit() or not n_libro.isdigit():
-                raise HTTPException(status_code=400, detail="N.FOLIO y N.LIBRO deben ser numéricos")
+                raise HTTPException(status_code=400, detail="N.FOLIO y N.LIBRO deben ser numericos")
 
             folio_num = int(n_folio)
             libro_num = int(n_libro)
@@ -84,8 +103,8 @@ async def create_certificate(
 
         # Claves equivalentes para mapeo directo hacia headers del Sheet
         if anio:
-            certificado_dict["AÑO"] = anio
-            certificado_dict["AÃ‘O"] = anio
+            certificado_dict["A\u00D1O"] = anio
+            certificado_dict["ANIO"] = anio
         if n_folio:
             certificado_dict["N.FOLIO"] = n_folio
         if n_libro:
@@ -95,25 +114,32 @@ async def create_certificate(
         if certificado_dict.get("n_codigo"):
             certificado_dict["N.CODIGO"] = str(certificado_dict["n_codigo"]).strip()
         
-        # nombre_completo ya está incluido en certificado_dict si viene del frontend
+        # nombre_completo ya esta incluido en certificado_dict si viene del frontend
         
-        # Incluir datos de la mención si está disponible
+        # Incluir datos de la mencion si esta disponible
         if mencion_data:
             certificado_dict["mencion_nro"] = mencion_data.get('NRO', '')
             certificado_dict["mencion_especialidad"] = mencion_data.get('ESPECIALIDAD', '')
             certificado_dict["mencion_p_certificado"] = mencion_data.get('P. CERTIFICADO', '')
-            certificado_dict["mencion_texto"] = mencion_data.get('MENCIÓN', '')
+            certificado_dict["mencion_texto"] = _first_sheet_value(
+                mencion_data, ["MENCI\u00d3N", "MENCION"], ""
+            )
             certificado_dict["mencion_horas"] = mencion_data.get('HORAS', '')
             certificado_dict["fecha_inicio"] = mencion_data.get('F. INICIO', '')
-            certificado_dict["fecha_termino"] = mencion_data.get('F. TÉRMINO', '')
-            certificado_dict["fecha_emision_mencio"] = mencion_data.get('F. EMISIÓN', '')
+            certificado_dict["fecha_termino"] = _first_sheet_value(
+                mencion_data, ["F. T\u00c9RMINO", "F. TERMINO", "FECHA T\u00c9RMINO", "FECHA TERMINO"], ""
+            )
+            certificado_dict["fecha_emision_mencio"] = _first_sheet_value(
+                mencion_data, ["F. EMISI\u00d3N", "F. EMISION", "FECHA EMISI\u00d3N", "FECHA EMISION"], ""
+            )
         
-        # Generar código si no se proporcionó
+        # Generar codigo si no se proporciono (reintenta con salt si ya existe)
         if not certificado_dict.get("codigo"):
-            from app.core.code_generator import generate_certificate_code
-            certificado_dict["codigo"] = generate_certificate_code(
+            from app.core.code_generator import generate_unique_certificate_code
+            certificado_dict["codigo"] = generate_unique_certificate_code(
+                code_exists=lambda c: bool(sheets_service.get_certificate_by_code(c)),
                 dni=certificado.dni,
-                mencion_nro=mencion_nro
+                mencion_nro=mencion_nro,
             )
 
         # Enriquecer datos del cliente desde la hoja CLIENTES (si hay DNI)
@@ -132,7 +158,7 @@ async def create_certificate(
                     if nombre_cliente and not certificado_dict.get("nombre_completo"):
                         certificado_dict["nombre_completo"] = str(nombre_cliente).strip()
 
-                    # Teléfono y correo
+                    # TelAfono y correo
                     telefono_cliente = (
                         cliente.get("CELULAR DEL CLIENTE")
                         or cliente.get("TELEFONO")
@@ -151,25 +177,25 @@ async def create_certificate(
                         certificado_dict["email"] = str(correo_cliente).strip()
         except Exception as e:
             pass
-            # No bloquear la creación si falla el enriquecimiento
+            # No bloquear la creaciA3n si falla el enriquecimiento
         
         try:
             nuevo_certificado = sheets_service.create_certificate(certificado_dict, mencion_data=mencion_data)
         except Exception as e:
             pass
-            # Limpiar caracteres Unicode problemáticos del mensaje de error
+            # Limpiar caracteres Unicode problemAticos del mensaje de error
             error_msg = str(e).encode('ascii', 'ignore').decode('ascii')
             raise HTTPException(status_code=500, detail=f"Error creando certificado en Google Sheets: {error_msg}")
         
         verify_url = f"{settings.BASE_URL}/consulta/{nuevo_certificado.get('codigo')}"
         
-        # Actualizar PDF_URL en Google Sheets con la URL de verificación (la misma que usa el QR)
+        # Actualizar PDF_URL en Google Sheets con la URL de verificaciA3n (la misma que usa el QR)
         try:
             sheets_service.update_certificate_pdf_url(nuevo_certificado.get('codigo'), verify_url)
         except Exception as e_update:
             pass
         
-        # Asegurar que nombres y apellidos tengan valores válidos
+        # Asegurar que nombres y apellidos tengan valores vAlidos
         nombres = nuevo_certificado.get("nombres") or ""
         apellidos = nuevo_certificado.get("apellidos") or ""
         
@@ -185,7 +211,7 @@ async def create_certificate(
                     nombres = nombre_completo
         
         
-        # Convertir horas a string si es número
+        # Convertir horas a string si es nAomero
         horas_value = nuevo_certificado.get("horas")
         if horas_value is not None:
             horas_value = str(horas_value) if not isinstance(horas_value, str) else horas_value
@@ -218,15 +244,15 @@ async def create_certificate(
         raise HTTPException(status_code=500, detail="Error creando certificado")
 
 
-# CRÍTICO: Esta ruta DEBE estar ANTES de cualquier otra ruta que use /certificados/{codigo}
-# FastAPI resuelve rutas en orden de definición, y las rutas más específicas deben ir primero
-# Debe estar justo después de create_certificate para asegurar que se registre antes que otras rutas
+# CRATICO: Esta ruta DEBE estar ANTES de cualquier otra ruta que use /certificados/{codigo}
+# FastAPI resuelve rutas en orden de definiciA3n, y las rutas mAs especAficas deben ir primero
+# Debe estar justo despuAs de create_certificate para asegurar que se registre antes que otras rutas
 @router.get("/certificados/{codigo}/qr", name="download_qr")
 async def download_qr(
     codigo: str,
     current_user: dict = Depends(get_operator_or_admin)
 ):
-    """Descarga el código QR de un certificado (Operador/Admin)"""
+    """Descarga el cA3digo QR de un certificado (Operador/Admin)"""
     try:
         certificado = sheets_service.get_certificate_by_code(codigo)
         if not certificado:
@@ -242,7 +268,7 @@ async def download_qr(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error generando QR: {str(e)}")
+        raise_safe_500(_log, "Error generando QR", e)
 
 
 @router.post("/certificados/{codigo}/anular", response_model=CertificateResponse)
@@ -272,7 +298,24 @@ async def anular_certificate(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error anulando certificado: {str(e)}")
+        raise_safe_500(_log, "Error anulando certificado", e)
+
+
+@router.delete("/certificados/{codigo}")
+async def delete_certificate(
+    codigo: str,
+    current_user: dict = Depends(get_operator_or_admin)
+):
+    """Elimina un certificado de la lista (CERTIFICADOS QR)"""
+    try:
+        deleted = sheets_service.delete_certificate(codigo)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Certificado no encontrado")
+        return {"message": "Certificado eliminado exitosamente", "codigo": codigo}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise_safe_500(_log, "Error eliminando certificado", e)
 
 
 @router.post("/certificados/{codigo}/unir-pdf")
@@ -283,22 +326,22 @@ async def unir_pdfs(
 ):
     """
     Une un PDF adicional al certificado generado.
-    El PDF subido se agregará después del PDF del certificado.
+    El PDF subido se agregarA despuAs del PDF del certificado.
     """
     try:
         # Validar tipo de archivo
         if not pdf_file.content_type == 'application/pdf':
-            raise HTTPException(status_code=400, detail="El archivo debe ser un PDF")
-        
-        # Validar tamaño del archivo (máximo 10MB)
+                raise HTTPException(status_code=400, detail="El archivo debe ser un PDF")
+
+        # Validar tamaAo del archivo (mAximo 10MB)
         MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
         file_content = await pdf_file.read()
         if len(file_content) > MAX_FILE_SIZE:
-            raise HTTPException(status_code=400, detail="El archivo PDF no puede exceder 10MB")
-        
+                raise HTTPException(status_code=400, detail="El archivo supera el tamaño máximo permitido (10MB)")
+
         # Validar que realmente sea un PDF leyendo el header
         if not file_content.startswith(b'%PDF'):
-            raise HTTPException(status_code=400, detail="El archivo no es un PDF válido")
+                raise HTTPException(status_code=400, detail="El archivo no es un PDF válido")
         
         # Resetear el archivo para leerlo de nuevo
         pdf_file.file.seek(0)
@@ -319,7 +362,7 @@ async def unir_pdfs(
         # Validar y limpiar el nombre del archivo (prevenir path traversal)
         import re
         nombre_pdf_subido = re.sub(r'[^a-zA-Z0-9._-]', '_', nombre_pdf_subido)
-        # Quitar la extensión .pdf del nombre
+        # Quitar la extensiA3n .pdf del nombre
         if nombre_pdf_subido.lower().endswith('.pdf'):
             nombre_pdf_subido = nombre_pdf_subido[:-4]
         
@@ -329,13 +372,13 @@ async def unir_pdfs(
         # Crear writer para el PDF final
         writer = PdfWriter()
         
-        # Agregar primero las páginas del PDF subido
+        # Agregar primero las pAginas del PDF subido
         pdf_subido_buffer = BytesIO(pdf_subido_content)
         reader_subido = PdfReader(pdf_subido_buffer)
         for page in reader_subido.pages:
             writer.add_page(page)
         
-        # Agregar después las páginas del certificado generado
+        # Agregar despuAs las pAginas del certificado generado
         reader_certificado = PdfReader(pdf_certificado_buffer)
         for page in reader_certificado.pages:
             writer.add_page(page)
@@ -345,31 +388,27 @@ async def unir_pdfs(
         writer.write(pdf_unido_buffer)
         pdf_unido_content = pdf_unido_buffer.getvalue()
         
-        # Guardar PDF unido
-        from app.core.storage import StorageService
-        storage_service = StorageService()
-        
+        # Subir PDF unido a Google Drive (no se guarda en disco local: el
+        # contenido subido por el operador no es reproducible desde la hoja)
+        from app.core.google_drive import upload_file_to_folder
         filename = f"certificado_{codigo}_unido.pdf"
-        storage_info = storage_service.save_pdf(
-            file_content=pdf_unido_content,
-            filename=filename,
-            codigo=codigo
+        drive_url = upload_file_to_folder(
+            pdf_unido_content, filename, settings.GOOGLE_DRIVE_CERTIFICADOS_FOLDER_ID
         )
-        
+
         # Obtener timestamp actual
         from datetime import datetime
         timestamp_generacion = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        
-        # Generar URL de verificación (la misma que usa el QR)
-        from app.core.config import settings
+
+        # Generar URL de verificaciA3n (la misma que usa el QR)
         verify_url = f"{settings.BASE_URL}/consulta/{codigo}"
-        
-        # Actualizar certificado en Google Sheets con múltiples campos
+
+        # Actualizar certificado en Google Sheets con mAoltiples campos
         try:
-            # IMPORTANTE: Guardar la URL del archivo físico en PDF_URL para que el endpoint público
-            # sepa encontrarlo y no lo regenere (perdiendo la unión).
+            # IMPORTANTE: Guardar la URL de Drive en PDF_URL para que el endpoint pAoblico
+            # sepa encontrarlo y no lo regenere (perdiendo la uniA3n).
             fields_to_update = {
-                'PDF_URL': storage_info['url'],
+                'PDF_URL': drive_url,
                 'CODIGO CERTIFICADO': nombre_pdf_subido,
                 'FECHA_GENERACION': timestamp_generacion
             }
@@ -378,10 +417,10 @@ async def unir_pdfs(
             pass
             # Intentar actualizar solo la URL como fallback
             try:
-                sheets_service.update_certificate_pdf_url(codigo, storage_info['url'])
+                sheets_service.update_certificate_pdf_url(codigo, drive_url)
             except:
                 pass
-        
+
         return {
             "message": "PDFs unidos exitosamente",
             "codigo": codigo,
@@ -392,7 +431,7 @@ async def unir_pdfs(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error uniendo PDFs: {str(e)}")
+        raise_safe_500(_log, "Error uniendo PDFs", e)
 
 
 @router.post("/certificados/{codigo}/reemplazar-pdf")
@@ -406,15 +445,15 @@ async def reemplazar_pdf(
     """
     try:
         if pdf_file.content_type != 'application/pdf':
-            raise HTTPException(status_code=400, detail="El archivo debe ser un PDF")
+                raise HTTPException(status_code=400, detail="El archivo debe ser un PDF")
 
         max_file_size = 10 * 1024 * 1024  # 10MB
         file_content = await pdf_file.read()
         if len(file_content) > max_file_size:
-            raise HTTPException(status_code=400, detail="El archivo PDF no puede exceder 10MB")
+                raise HTTPException(status_code=400, detail="El archivo supera el tamaño máximo permitido (10MB)")
 
         if not file_content.startswith(b'%PDF'):
-            raise HTTPException(status_code=400, detail="El archivo no es un PDF valido")
+                raise HTTPException(status_code=400, detail="El archivo no es un PDF válido")
 
         certificado = sheets_service.get_certificate_by_code(codigo)
         if not certificado:
@@ -426,37 +465,34 @@ async def reemplazar_pdf(
         if nombre_pdf_subido.lower().endswith('.pdf'):
             nombre_pdf_subido = nombre_pdf_subido[:-4]
 
-        from app.core.storage import StorageService
-        storage_service = StorageService()
-
+        # Subir a Google Drive (no se guarda en disco local)
+        from app.core.google_drive import upload_file_to_folder
         filename = f"certificado_{codigo}_reemplazo.pdf"
-        storage_info = storage_service.save_pdf(
-            file_content=file_content,
-            filename=filename,
-            codigo=codigo
+        drive_url = upload_file_to_folder(
+            file_content, filename, settings.GOOGLE_DRIVE_CERTIFICADOS_FOLDER_ID
         )
 
         timestamp_generacion = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         fields_to_update = {
-            'PDF_URL': storage_info['url'],
+            'PDF_URL': drive_url,
             'CODIGO CERTIFICADO': nombre_pdf_subido,
             'FECHA_GENERACION': timestamp_generacion
         }
 
         update_ok = sheets_service.update_certificate_fields(codigo, fields_to_update)
         if not update_ok:
-            sheets_service.update_certificate_pdf_url(codigo, storage_info['url'])
+            sheets_service.update_certificate_pdf_url(codigo, drive_url)
 
         return {
             "message": "PDF reemplazado exitosamente",
             "codigo": codigo,
-            "pdf_url": storage_info['url']
+            "pdf_url": drive_url
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error reemplazando PDF: {str(e)}")
+        raise_safe_500(_log, "Error reemplazando PDF", e)
 
 
 @router.get("/certificados", response_model=List[dict])
@@ -469,8 +505,7 @@ async def list_certificates(
         certificados = sheets_service.get_all_certificates_qr()
         return certificados
     except Exception as e:
-        clean_error_msg = str(e).encode('ascii', 'ignore').decode('ascii')
-        raise HTTPException(status_code=500, detail=f"Error listando certificados: {clean_error_msg}")
+        raise_safe_500(_log, "Error listando certificados", e)
 
 
 @router.put("/certificados/{codigo}", response_model=CertificateResponse)
@@ -503,39 +538,35 @@ async def update_certificate(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error actualizando certificado: {str(e)}")
+        raise_safe_500(_log, "Error actualizando certificado", e)
 
 
 @router.get("/users", response_model=List[UserResponse])
 async def list_users(current_user: dict = Depends(get_admin_user)):
-    """Lista todos los usuarios (solo Admin)"""
-    # En producción, esto debería venir de una base de datos
-    from app.core.users import users_db
-    users = []
-    for email, user_data in users_db.items():
-        users.append(UserResponse(
-            email=user_data["email"],
-            role=user_data["role"],
-            active=user_data.get("active", True)
-        ))
-    return users
+    """Lista usuarios desde Google Sheets CREDENCIALES."""
+    from app.core.users import list_all_users
+
+    return [
+        UserResponse(
+            email=u["email"],
+            role=u["role"],
+            active=u.get("active", True),
+        )
+        for u in list_all_users()
+    ]
 
 
 @router.put("/users/{email}/activate")
 async def activate_user(email: str, current_user: dict = Depends(get_admin_user)):
-    """Activa un usuario (solo Admin)"""
-    try:
-        update_user_status(email, True)
-        return {"message": f"Usuario {email} activado"}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    raise HTTPException(
+        status_code=400,
+        detail="Activa usuarios editando la columna Estado en Google Sheets (CREDENCIALES).",
+    )
 
 
 @router.put("/users/{email}/deactivate")
 async def deactivate_user(email: str, current_user: dict = Depends(get_admin_user)):
-    """Desactiva un usuario (solo Admin)"""
-    try:
-        update_user_status(email, False)
-        return {"message": f"Usuario {email} desactivado"}
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    raise HTTPException(
+        status_code=400,
+        detail="Desactiva usuarios editando la columna Estado en Google Sheets (CREDENCIALES).",
+    )

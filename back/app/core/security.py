@@ -74,6 +74,6 @@ async def get_operator_or_admin(current_user: dict = Depends(get_current_user)):
     if current_user["role"] not in ["admin", "operador"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="No tienes permisos suficientes"
+            detail="No tienes permisos suficientes",
         )
     return current_user

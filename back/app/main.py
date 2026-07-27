@@ -6,135 +6,142 @@ from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 import os
+import secrets
 
-from app.routers import public, admin, auth
+from app.routers import public, admin, auth, dashboard
 from app.core.config import settings
 from app.core.config import ROOT
 from app.core.limiter import limiter
 
-# Validar SECRET_KEY en producción
 if os.getenv('ENVIRONMENT', 'development') == 'production':
     if settings.SECRET_KEY == 'dev_key_change_this':
-        raise ValueError("SECRET_KEY debe estar configurado en producción. Configure la variable de entorno SECRET_KEY.")
-    if settings.ADMIN_PASSWORD == 'admin123':
-        raise ValueError("ADMIN_PASSWORD debe estar configurado en producción. Configure la variable de entorno ADMIN_PASSWORD.")
+        raise ValueError("SECRET_KEY debe estar configurado en producción.")
 
 app = FastAPI(
-    title="Sistema de Certificados con QR",
-    description="API para gestión de certificados con integración a Google Sheets",
-    version="1.0.0",
+    title="Centro Profesional Docente",
+    description="API unificada: certificados QR y panel de asesores",
+    version="2.0.0",
     docs_url="/docs" if os.getenv('ENVIRONMENT', 'development') != 'production' else None,
     redoc_url="/redoc" if os.getenv('ENVIRONMENT', 'development') != 'production' else None,
 )
 
-# CORS - Configuración para producción y desarrollo
 allowed_origins = []
-if os.getenv('ENVIRONMENT', 'development') == 'production':
-    # En producción, solo permitir el dominio real
+is_production = os.getenv('ENVIRONMENT', 'development') == 'production'
+
+if is_production:
     if settings.BASE_URL:
         allowed_origins.append(settings.BASE_URL)
-        # También permitir versión con www
+        if settings.FRONTEND_URL:
+            allowed_origins.append(settings.FRONTEND_URL)
+        if settings.DASHBOARD_URL:
+            allowed_origins.append(settings.DASHBOARD_URL)
         if settings.BASE_URL.startswith('https://'):
             allowed_origins.append(settings.BASE_URL.replace('https://', 'https://www.'))
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization", "Accept", "X-CSRF-Token"],
+        expose_headers=["Content-Type"],
+        max_age=3600,
+    )
 else:
-    # En desarrollo, permitir localhost
-    allowed_origins.extend([
-        "http://localhost:3000",
-        "http://localhost:5173",
-    ])
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_headers=["Content-Type", "Authorization", "Accept", "X-CSRF-Token"],
+        expose_headers=["Content-Type"],
+        max_age=3600,
+    )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "Accept"],
-    expose_headers=["Content-Type"],
-    max_age=3600,
-)
-
-# Rate limiting
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Middleware para agregar headers de seguridad
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    if request.method == "POST" and "/certificados/subir" in request.url.path:
+        import logging
+        logging.getLogger("upload").info("Recibiendo POST %s", request.url.path)
+    return await call_next(request)
+
+
+CSRF_EXEMPT_PATHS = {"/api/auth/login"}
+CSRF_PROTECTED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+@app.middleware("http")
+async def verify_csrf(request: Request, call_next):
+    # El CSRF solo protege acciones que viajan sobre una sesión autenticada
+    # (cookie access_token). Endpoints públicos sin sesión (búsqueda de
+    # certificados, etc.) no tienen nada que un atacante pueda secuestrar.
+    has_session = bool(request.cookies.get("access_token"))
+    if (
+        has_session
+        and request.method in CSRF_PROTECTED_METHODS
+        and request.url.path.startswith("/api/")
+        and request.url.path not in CSRF_EXEMPT_PATHS
+    ):
+        cookie_token = request.cookies.get("csrf_token")
+        header_token = request.headers.get("x-csrf-token")
+        if not cookie_token or not header_token or not secrets.compare_digest(cookie_token, header_token):
+            return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content={"detail": "Token CSRF invalido o ausente"},
+            )
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
-    # Headers de seguridad
     response.headers["X-Content-Type-Options"] = "nosniff"
-
     response.headers["X-XSS-Protection"] = "1; mode=block"
-    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Content-Security-Policy"] = (
-        "default-src 'self'; "
-        "script-src 'self'; "
-        "style-src 'self' 'unsafe-inline'; "
-        "img-src 'self' data: blob: https:; "
-        "font-src 'self' data:; "
-        "connect-src 'self' https: http:; "
-        "frame-src 'self' https://docs.google.com; "
-        "object-src 'none'; "
-        "base-uri 'self'; "
-        "frame-ancestors 'self'"
-    )
+    response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+    if os.getenv('ENVIRONMENT', 'development') == 'production':
+        response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
     return response
 
-# Exception handler para errores de validación (422)
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Maneja errores de validación de Pydantic sin exponer información sensible"""
     errors = []
     for error in exc.errors():
         field = " -> ".join(str(loc) for loc in error.get("loc", []))
-        msg = error.get("msg", "Error de validación")
-        errors.append(f"{field}: {msg}")
-    
+        errors.append(f"{field}: {error.get('msg', 'Error')}")
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={
-            "detail": "; ".join(errors) if errors else "Error de validación en los datos enviados"
-        }
+        content={"detail": "; ".join(errors) if errors else "Error de validación"},
     )
 
-# Exception handler global para errores no manejados
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Maneja errores no esperados sin exponer información sensible"""
-    # En producción, no exponer detalles del error
     is_production = os.getenv('ENVIRONMENT', 'development') == 'production'
-    detail = "Error interno del servidor" if is_production else str(exc)
-    
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": detail}
+        content={"detail": "Error interno del servidor" if is_production else str(exc)},
     )
 
-# Routers
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(public.router, prefix="/api/public", tags=["public"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 
-# Importar router de compras
-from app.routers import compras
+from app.routers import compras, clientes
 app.include_router(compras.router, prefix="/api/admin", tags=["compras"])
-
-# Importar router de clientes
-from app.routers import clientes
 app.include_router(clientes.router, prefix="/api/admin", tags=["clientes"])
 
-# Exponer archivos PDF almacenados localmente
 uploads_path = ROOT / "uploads"
 uploads_path.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(uploads_path)), name="uploads")
 
 
-@app.get("/")
-def root():
-    return {"message": "Sistema de Certificados API", "version": "1.0.0"}
-
-
 @app.get("/health")
+@app.get("/api/health")
 def health():
     return {"status": "ok"}

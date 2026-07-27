@@ -1,95 +1,148 @@
+"""
+Configuración central de la aplicación.
+
+Libros Google Sheets:
+  - GOOGLE_SHEET_ID        → todo certificados, ventas, clientes, compras, registros mensuales
+  - SHEET_CREDENCIALES_ID  → login asesores
+  - GOOGLE_SHEET_MENCIONES_ID → catálogo de menciones
+
+Credenciales: app/core/google_credentials.py
+"""
 import os
-from pathlib import Path
 from datetime import timedelta
+from pathlib import Path
+
 from dotenv import load_dotenv
 
-load_dotenv()  # carga .env en local; en Render no estorba
+load_dotenv()
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
 
-class Config:
-    SECRET_KEY = os.getenv('SECRET_KEY', 'dev_key_change_this')
-    BASE_URL = os.getenv('BASE_URL', 'https://centroprofesionaldocente.com')
-    ALGORITHM = os.getenv('ALGORITHM', 'HS256')
-    ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES', '30'))
-    
-    # Admin Default
-    ADMIN_EMAIL = os.getenv('ADMIN_EMAIL', 'admin@example.com')
-    ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD', 'admin123')
-    
-    # Rate Limiting
-    RATE_LIMIT_PER_MINUTE = int(os.getenv('RATE_LIMIT_PER_MINUTE', '60'))
-    LOGIN_RATE_LIMIT = os.getenv('LOGIN_RATE_LIMIT', '10/minute')
-    
-    # Sesión
-    SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SAMESITE = 'Lax'
-    PERMANENT_SESSION_LIFETIME = timedelta(
-        seconds=int(os.getenv('SESSION_SECONDS', '3600'))
-    )
+def _env(key: str, default: str = "") -> str:
+    return os.getenv(key, default)
 
-    # IDs de Sheets
-    SHEETS = {
-        'certificados': {
-            'id': os.getenv('GOOGLE_SHEET_ID', '15sZo9tyeF-hw0Pgd8YrDgJBNkUPXBF0u6BTEj8-p3Fw'),
-            'worksheets': {
-                'certificados': 'certificados',  # nombre de la hoja/worksheet original
-                'certificados_qr': 'CERTIFICADOS QR'  # hoja donde se guardan los certificados con datos del cliente
-            },
-        },
-        'compras': {
-            'id': os.getenv('GOOGLE_SHEET_ID', '15sZo9tyeF-hw0Pgd8YrDgJBNkUPXBF0u6BTEj8-p3Fw'),
-            'worksheets': {
-                'compras': 'compras'  # hoja de compras/ventas de certificados
-            },
-        },
-        'menciones': {
-            'id': os.getenv('GOOGLE_SHEET_MENCIONES_ID', '1zaFo7ZJq0yAIjNwcTWJiCr3odCzs6ZYL_ibRE8yrkeM'),
-            'worksheets': {
-                'registro': 'MENCIONES'  # hoja de menciones con estructura: NRO, ESPECIALIDAD, P. CERTIFICADO, MENCIÓN, HORAS, F. INICIO, F. TÉRMINO, F. EMISIÓN
-            },
-        },
-        'clientes': {
-            'id': os.getenv('GOOGLE_SHEET_ID', '15sZo9tyeF-hw0Pgd8YrDgJBNkUPXBF0u6BTEj8-p3Fw'),
-            'worksheets': {
-                'clientes': 'CLIENTES'  # hoja de clientes
-            },
-        },
+
+def _env_int(key: str, default: int) -> int:
+    raw = os.getenv(key)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _sheet(sheet_id: str, worksheets: dict, nombre: str | None = None) -> dict:
+    entry = {"id": sheet_id, "worksheets": worksheets}
+    if nombre:
+        entry["nombre"] = nombre
+    return entry
+
+
+# ---------------------------------------------------------------------------
+# Google Sheets
+# ---------------------------------------------------------------------------
+
+# Libro principal: certificados QR, QUERYS, clientes, compras y registros mensuales
+_MAIN_SHEET_ID = _env("GOOGLE_SHEET_ID", "15sZo9tyeF-hw0Pgd8YrDgJBNkUPXBF0u6BTEj8-p3Fw")
+
+_CREDENCIALES_SHEET_ID = _env(
+    "SHEET_CREDENCIALES_ID",
+    "148ihDOBboVOf7vDOFnqaqDSXH1dO3yB_yXiX5454UCY",
+)
+_CREDENCIALES_WS = _env("GOOGLE_SHEET_CREDENCIALES_WS", "CREDENCIALES")
+_MENCIONES_SHEET_ID = _env(
+    "GOOGLE_SHEET_MENCIONES_ID",
+    "1zaFo7ZJq0yAIjNwcTWJiCr3odCzs6ZYL_ibRE8yrkeM",
+)
+
+# Pestañas del libro principal
+_WS_CERTIFICADOS_QR = "CERTIFICADOS QR"
+_WS_QUERYS_CURSOS = "QUERYS CURSOS"
+_WS_QUERYS_CERTIFICADOS = "QUERYS CERTIFICADOS"
+
+# Registros mensuales (subir ventas / subir certificados) — mismo libro, pestañas distintas
+_CURSOS_WS_DEFAULT = "JULIO-2026"
+_CERT_MENSUAL_WS_DEFAULT = "CERTIFICADOS JULIO-2026"
+_SERUMS_WS_DEFAULT = "SERUMS JULIO-2026"
+_CURSOS_WS = _env("GOOGLE_SHEET_CURSOS_WS") or _env("GOOGLE_SHEET_REGISTRO_WS", _CURSOS_WS_DEFAULT)
+_CERT_MENSUAL_WS = _env("GOOGLE_SHEET_CERT_MENSUAL_WS", _CERT_MENSUAL_WS_DEFAULT)
+_SERUMS_WS = _env("GOOGLE_SHEET_SERUMS_WS", _SERUMS_WS_DEFAULT)
+
+# Carpetas Drive
+_GOOGLE_DRIVE_COMPROBANTES_FOLDER = _env(
+    "GOOGLE_DRIVE_COMPROBANTES_FOLDER_ID",
+    "1zE4SaRoOHUv_LfKEVUabcgh76Ad6eadF",
+)
+_GOOGLE_DRIVE_CERTIFICADOS_FOLDER = _env(
+    "GOOGLE_DRIVE_CERTIFICADOS_FOLDER_ID",
+    "1PgUK7-AvL4Hhyr5uSt2cnbxUYY-p-0ZN",
+)
+_GOOGLE_DRIVE_SERUMS_FOLDER = _env(
+    "GOOGLE_DRIVE_SERUMS_FOLDER_ID",
+    "1VRSepuw4WFQV9nyC4U5q8xERkiO8Z8e_",
+)
+
+
+def build_sheets_config() -> dict:
+    """
+    Claves internas del código → libro y pestañas.
+
+    certificados, ventas, cursos, etc. apuntan al mismo GOOGLE_SHEET_ID;
+    solo cambia el nombre de la pestaña (worksheet).
+    """
+    return {
+        # --- Libro principal (GOOGLE_SHEET_ID) ---
+        "certificados": _sheet(_MAIN_SHEET_ID, {
+            "certificados": "certificados",
+            "certificados_qr": _WS_CERTIFICADOS_QR,
+        }),
+        "compras": _sheet(_MAIN_SHEET_ID, {"compras": "compras"}),
+        "clientes": _sheet(_MAIN_SHEET_ID, {"clientes": "CLIENTES"}),
+        "ventas": _sheet(_MAIN_SHEET_ID, {
+            "cursos": _WS_QUERYS_CURSOS,
+            "certificados": _WS_QUERYS_CERTIFICADOS,
+        }),
+        "cursos": _sheet(_MAIN_SHEET_ID, {"registro": _CURSOS_WS}),
+        "certificados_mensual": _sheet(_MAIN_SHEET_ID, {"registro": _CERT_MENSUAL_WS}),
+        "serums_mensual": _sheet(_MAIN_SHEET_ID, {"registro": _SERUMS_WS}),
+        # --- Libros separados ---
+        "credenciales": _sheet(
+            _CREDENCIALES_SHEET_ID,
+            {"usuarios": _CREDENCIALES_WS},
+            nombre="DATOS DE ASESOR - CENTRO PROFESIONAL DOCENTE",
+        ),
+        "menciones": _sheet(_MENCIONES_SHEET_ID, {"registro": "MENCIONES"}),
     }
 
-    # Resuelve credenciales de Google en este orden:
-    # 1) GOOGLE_SA_FILE (ruta a archivo: /etc/secrets/sa.json en Render, ./service_account.json en local)
-    # 2) GOOGLE_APPLICATION_CREDENTIALS (convención Google)
-    # 3) ./service_account.json si existe (solo local)
-    # 4) path/service_account.json si existe (solo local)
-    # Resuelve credenciales de Google (JSON directo o Archivo)
-    SERVICE_ACCOUNT_JSON = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON') # Soporte para pegar el JSON completo
-    
-    SERVICE_ACCOUNT_FILE = None
-    if not SERVICE_ACCOUNT_JSON:
-        candidates = [
-            os.getenv('GOOGLE_SA_FILE'),
-            '/etc/secrets/GOOGLE_SERVICE_ACCOUNT', # Ruta común en Render
-            '/etc/secrets/service_account.json',   # Otra ruta común
-            os.getenv('GOOGLE_APPLICATION_CREDENTIALS'),
-            str(ROOT / 'service_account.json')
-        ]
-        
-        for candidate in candidates:
-            if candidate and os.path.exists(candidate):
-                SERVICE_ACCOUNT_FILE = str(candidate)
-                break
-    
-    if not SERVICE_ACCOUNT_FILE and not SERVICE_ACCOUNT_JSON:
-        # Fallback para desarrollo local si no se encuentra nada
-        SERVICE_ACCOUNT_FILE = str(ROOT / 'service_account.json')
 
-    # Alternativa: JSON completo en env (si algún entorno lo usa)
-    SERVICE_ACCOUNT_JSON = os.getenv('GOOGLE_SERVICE_ACCOUNT')
-    # También soportar Base64 (más seguro para variables de entorno)
-    SERVICE_ACCOUNT_JSON_B64 = os.getenv('GOOGLE_SERVICE_ACCOUNT_B64')
+class Config:
+    SECRET_KEY = _env("SECRET_KEY", "dev_key_change_this")
+    BASE_URL = _env("BASE_URL", "https://centroprofesionaldocente.com")
+    FRONTEND_URL = _env("FRONTEND_URL", "http://localhost:3000")
+    DASHBOARD_URL = _env("DASHBOARD_URL", "https://dashboard.centroprofesionaldocente.com")
+    ALGORITHM = _env("ALGORITHM", "HS256")
+    ACCESS_TOKEN_EXPIRE_MINUTES = _env_int("ACCESS_TOKEN_EXPIRE_MINUTES", 30)
+
+    ADMIN_EMAIL = _env("ADMIN_EMAIL", "admin@example.com")
+    ADMIN_PASSWORD = _env("ADMIN_PASSWORD", "admin123")
+
+    RATE_LIMIT_PER_MINUTE = _env_int("RATE_LIMIT_PER_MINUTE", 60)
+    LOGIN_RATE_LIMIT = _env("LOGIN_RATE_LIMIT", "10/minute")
+
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    PERMANENT_SESSION_LIFETIME = timedelta(seconds=_env_int("SESSION_SECONDS", 3600))
+
+    STORAGE_PATH = _env("STORAGE_PATH", "uploads/certificados")
+    BASE_STORAGE_URL = _env("BASE_STORAGE_URL", f"{BASE_URL}/uploads/certificados")
+
+    GOOGLE_SHEET_ID = _MAIN_SHEET_ID
+    GOOGLE_DRIVE_COMPROBANTES_FOLDER_ID = _GOOGLE_DRIVE_COMPROBANTES_FOLDER
+    GOOGLE_DRIVE_CERTIFICADOS_FOLDER_ID = _GOOGLE_DRIVE_CERTIFICADOS_FOLDER
+    GOOGLE_DRIVE_SERUMS_FOLDER_ID = _GOOGLE_DRIVE_SERUMS_FOLDER
+    SHEETS = build_sheets_config()
 
 
-# Instancia global de configuración
 settings = Config()
