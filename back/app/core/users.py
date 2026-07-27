@@ -41,8 +41,3 @@ def create_user(email: str, password: str, role: str) -> Dict:
         "Agrega o edita filas en la hoja de usuarios."
     )
 
-
-def update_user_status(email: str, active: bool):
-    raise ValueError(
-        "El estado de usuarios se gestiona en Google Sheets (columna Estado)."
-    )
